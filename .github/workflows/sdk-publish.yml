@@ -1,0 +1,201 @@
+name: SDK Auto-Generation and Publishing
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'services/web-api/**'
+      - 'sdks/**'
+      - '.github/workflows/sdk-publish.yml'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  export-openapi-spec:
+    name: Export OpenAPI Specification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        working-directory: services/web-api
+        run: |
+          pip install -r requirements.txt
+
+      - name: Export OpenAPI spec
+        working-directory: services/web-api
+        run: |
+          python -c "
+          from src.main import app
+          import json
+          with open('../../openapi.json', 'w') as f:
+              json.dump(app.openapi(), f, indent=2)
+          "
+
+      - name: Upload OpenAPI spec
+        uses: actions/upload-artifact@v3
+        with:
+          name: openapi-spec
+          path: openapi.json
+
+  test-python-sdk:
+    name: Test Python SDK
+    runs-on: ubuntu-latest
+    needs: export-openapi-spec
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install SDK dependencies
+        working-directory: sdks/python
+        run: |
+          pip install -e ".[dev]"
+
+      - name: Run Python SDK tests
+        working-directory: sdks/python
+        run: |
+          pytest --cov=utxoiq --cov-report=term-missing --cov-report=xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./sdks/python/coverage.xml
+          flags: python-sdk
+
+  test-javascript-sdk:
+    name: Test JavaScript SDK
+    runs-on: ubuntu-latest
+    needs: export-openapi-spec
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install SDK dependencies
+        working-directory: sdks/javascript
+        run: npm ci
+
+      - name: Build SDK
+        working-directory: sdks/javascript
+        run: npm run build
+
+      - name: Run JavaScript SDK tests
+        working-directory: sdks/javascript
+        run: npm run test:coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./sdks/javascript/coverage/coverage-final.json
+          flags: javascript-sdk
+
+  publish-python-sdk:
+    name: Publish Python SDK to PyPI
+    runs-on: ubuntu-latest
+    needs: [test-python-sdk, test-javascript-sdk]
+    if: github.event_name == 'release'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install build tools
+        run: |
+          pip install build twine
+
+      - name: Build Python package
+        working-directory: sdks/python
+        run: |
+          python -m build
+
+      - name: Publish to PyPI
+        working-directory: sdks/python
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          twine upload dist/*
+
+  publish-javascript-sdk:
+    name: Publish JavaScript SDK to npm
+    runs-on: ubuntu-latest
+    needs: [test-python-sdk, test-javascript-sdk]
+    if: github.event_name == 'release'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        working-directory: sdks/javascript
+        run: npm ci
+
+      - name: Build package
+        working-directory: sdks/javascript
+        run: npm run build
+
+      - name: Publish to npm
+        working-directory: sdks/javascript
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
+
+  validate-openapi-compatibility:
+    name: Validate OpenAPI Schema Compatibility
+    runs-on: ubuntu-latest
+    needs: export-openapi-spec
+    if: github.event_name == 'push'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Download current OpenAPI spec
+        uses: actions/download-artifact@v3
+        with:
+          name: openapi-spec
+          path: ./current
+
+      - name: Get previous OpenAPI spec
+        run: |
+          git checkout HEAD~1 -- openapi.json || echo "No previous spec found"
+          mv openapi.json ./previous/openapi.json || echo "No previous spec to move"
+
+      - name: Install OpenAPI diff tool
+        run: |
+          npm install -g openapi-diff
+
+      - name: Check for breaking changes
+        run: |
+          if [ -f ./previous/openapi.json ]; then
+            openapi-diff ./previous/openapi.json ./current/openapi.json --fail-on-incompatible
+          else
+            echo "No previous spec to compare"
+          fi

@@ -1,0 +1,23 @@
+apiVersion: 1
+
+datasources:
+  # Prometheus datasource
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: "15s"
+
+  # Google Cloud Monitoring datasource
+  - name: Google Cloud Monitoring
+    type: stackdriver
+    access: proxy
+    editable: true
+    jsonData:
+      authenticationType: gce
+      defaultProject: ${GCP_PROJECT_ID}
+    secureJsonData:
+      privateKey: ${GCP_SERVICE_ACCOUNT_KEY}

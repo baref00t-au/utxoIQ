@@ -1,0 +1,74 @@
+[
+  {
+    "name": "insight_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Unique identifier for the insight"
+  },
+  {
+    "name": "signal_type",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Type of signal that generated this insight"
+  },
+  {
+    "name": "confidence",
+    "type": "FLOAT",
+    "mode": "REQUIRED",
+    "description": "Confidence score (0-1)"
+  },
+  {
+    "name": "headline",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Insight headline (max 280 chars)"
+  },
+  {
+    "name": "summary",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Detailed insight summary"
+  },
+  {
+    "name": "created_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "Timestamp when insight was created"
+  },
+  {
+    "name": "block_height",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "Block height associated with insight"
+  },
+  {
+    "name": "chart_url",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "URL to chart image in Cloud Storage"
+  },
+  {
+    "name": "explainability_json",
+    "type": "JSON",
+    "mode": "NULLABLE",
+    "description": "Explainability summary for confidence score"
+  },
+  {
+    "name": "accuracy_rating",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "Aggregate user accuracy rating (0-1)"
+  },
+  {
+    "name": "feedback_count",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Number of user feedback submissions"
+  },
+  {
+    "name": "is_predictive",
+    "type": "BOOLEAN",
+    "mode": "NULLABLE",
+    "description": "Whether this is a predictive insight"
+  }
+]

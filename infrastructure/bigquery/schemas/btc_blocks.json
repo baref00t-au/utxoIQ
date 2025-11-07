@@ -1,0 +1,38 @@
+[
+  {
+    "name": "block_hash",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Unique hash identifier for the block"
+  },
+  {
+    "name": "height",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "Block height in the blockchain"
+  },
+  {
+    "name": "timestamp",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "Block creation timestamp"
+  },
+  {
+    "name": "size",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "Block size in bytes"
+  },
+  {
+    "name": "tx_count",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "Number of transactions in the block"
+  },
+  {
+    "name": "fees_total",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "Total fees in satoshis"
+  }
+]

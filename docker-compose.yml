@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  # PostgreSQL for transactional data
+  postgres:
+    image: postgres:15-alpine
+    container_name: utxoiq-postgres
+    environment:
+      POSTGRES_DB: utxoiq_db
+      POSTGRES_USER: utxoiq
+      POSTGRES_PASSWORD: utxoiq_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U utxoiq"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: utxoiq-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # BigQuery emulator for local testing
+  bigquery-emulator:
+    image: ghcr.io/goccy/bigquery-emulator:latest
+    container_name: utxoiq-bigquery-emulator
+    ports:
+      - "9050:9050"
+    environment:
+      - PROJECT_ID=utxoiq-local
+    command: --project=utxoiq-local --port=9050
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9050"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Cloud Pub/Sub emulator for local testing
+  pubsub-emulator:
+    image: gcr.io/google.com/cloudsdktool/cloud-sdk:emulators
+    container_name: utxoiq-pubsub-emulator
+    ports:
+      - "8085:8085"
+    command: gcloud beta emulators pubsub start --host-port=0.0.0.0:8085
+    environment:
+      - PUBSUB_PROJECT_ID=utxoiq-local
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: utxoiq-network

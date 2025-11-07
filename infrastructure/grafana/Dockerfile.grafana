@@ -1,0 +1,22 @@
+FROM grafana/grafana:latest
+
+# Install plugins
+RUN grafana-cli plugins install grafana-googlecloud-monitoring-datasource
+
+# Copy provisioning configuration
+COPY provisioning /etc/grafana/provisioning
+
+# Copy dashboards
+COPY dashboards /var/lib/grafana/dashboards
+
+# Set permissions
+USER root
+RUN chown -R grafana:grafana /etc/grafana/provisioning /var/lib/grafana/dashboards
+USER grafana
+
+# Expose Grafana port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1

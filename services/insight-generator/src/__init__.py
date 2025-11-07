@@ -1,0 +1,1 @@
+"""Insight Generator Service"""

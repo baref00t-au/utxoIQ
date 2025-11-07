@@ -1,0 +1,257 @@
+name: Security Compliance Checks
+
+on:
+  schedule:
+    # Run weekly on Monday at 9:00 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+    inputs:
+      check_type:
+        description: 'Type of security check to run'
+        required: true
+        type: choice
+        options:
+          - vulnerability-scan
+          - dependency-check
+          - iam-review
+          - all
+
+jobs:
+  vulnerability-scan:
+    name: Vulnerability Scanning
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event.inputs.check_type == 'vulnerability-scan' || github.event.inputs.check_type == 'all'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+      
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+      
+      - name: Check for critical vulnerabilities
+        run: |
+          if grep -q "CRITICAL" trivy-results.sarif; then
+            echo "::error::Critical vulnerabilities found!"
+            exit 1
+          fi
+
+  dependency-check:
+    name: Dependency Security Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event.inputs.check_type == 'dependency-check' || github.event.inputs.check_type == 'all'
+    
+    strategy:
+      matrix:
+        service:
+          - services/feature-engine
+          - services/insight-generator
+          - services/chart-renderer
+          - services/web-api
+          - services/x-bot
+          - services/email-service
+          - frontend
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        if: contains(matrix.service, 'services/')
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      - name: Check Python dependencies
+        if: contains(matrix.service, 'services/')
+        working-directory: ${{ matrix.service }}
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install safety
+            safety check --file requirements.txt --json > safety-report.json || true
+            
+            # Check for critical vulnerabilities
+            if grep -q '"severity": "critical"' safety-report.json; then
+              echo "::error::Critical vulnerabilities found in ${{ matrix.service }}"
+              cat safety-report.json
+              exit 1
+            fi
+          fi
+      
+      - name: Set up Node.js
+        if: matrix.service == 'frontend'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: Check npm dependencies
+        if: matrix.service == 'frontend'
+        working-directory: ${{ matrix.service }}
+        run: |
+          npm audit --audit-level=high --json > npm-audit.json || true
+          
+          # Check for high/critical vulnerabilities
+          if grep -q '"severity": "high"' npm-audit.json || grep -q '"severity": "critical"' npm-audit.json; then
+            echo "::error::High or critical vulnerabilities found in frontend"
+            cat npm-audit.json
+            exit 1
+          fi
+
+  secret-scanning:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event.inputs.check_type == 'all'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Check for secrets
+        run: |
+          if [ -f gitleaks-report.json ]; then
+            if [ -s gitleaks-report.json ]; then
+              echo "::error::Secrets detected in repository!"
+              cat gitleaks-report.json
+              exit 1
+            fi
+          fi
+
+  iam-review-check:
+    name: IAM Review Status Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event.inputs.check_type == 'iam-review' || github.event.inputs.check_type == 'all'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      - name: Check IAM review status
+        run: |
+          cd infrastructure/security/scripts
+          pip install -r requirements.txt
+          
+          # Check if quarterly IAM review is due
+          python3 << 'EOF'
+          import json
+          from datetime import datetime
+          from pathlib import Path
+          
+          reviews_path = Path("../iam-reviews")
+          if not reviews_path.exists():
+              print("::warning::No IAM reviews found. First review should be scheduled.")
+              exit(0)
+          
+          # Get current quarter
+          now = datetime.now()
+          current_quarter = f"Q{(now.month - 1) // 3 + 1}"
+          current_year = now.year
+          
+          # Check if current quarter review exists
+          review_id = f"IAM-{current_year}-{current_quarter}"
+          review_file = reviews_path / f"{review_id}_review.json"
+          
+          if not review_file.exists():
+              print(f"::warning::IAM review for {current_quarter} {current_year} not found. Review should be scheduled.")
+          else:
+              with open(review_file) as f:
+                  review = json.load(f)
+              if review['status'] != 'completed':
+                  print(f"::warning::IAM review for {current_quarter} {current_year} is {review['status']}. Should be completed.")
+              else:
+                  print(f"✓ IAM review for {current_quarter} {current_year} is completed.")
+          EOF
+
+  remediation-tracking:
+    name: Remediation Tracking Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event.inputs.check_type == 'all'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      - name: Check overdue findings
+        run: |
+          cd infrastructure/security/scripts
+          pip install -r requirements.txt
+          
+          # Generate remediation status report
+          python3 remediation_tracker.py report > /tmp/report.txt || true
+          
+          # Check for overdue critical findings
+          if grep -q "Critical Open:" /tmp/report.txt; then
+            critical_count=$(grep "Critical Open:" /tmp/report.txt | awk '{print $3}')
+            if [ "$critical_count" -gt 0 ]; then
+              echo "::error::$critical_count critical security findings are open!"
+              cat /tmp/report.txt
+              exit 1
+            fi
+          fi
+          
+          if grep -q "Overdue:" /tmp/report.txt; then
+            overdue_count=$(grep "Overdue:" /tmp/report.txt | awk '{print $2}')
+            if [ "$overdue_count" -gt 0 ]; then
+              echo "::warning::$overdue_count security findings are overdue!"
+              cat /tmp/report.txt
+            fi
+          fi
+
+  security-summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs: [vulnerability-scan, dependency-check, secret-scanning, iam-review-check, remediation-tracking]
+    if: always()
+    
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## Security Compliance Check Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Check Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Vulnerability Scan | ${{ needs.vulnerability-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Check | ${{ needs.dependency-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Secret Scanning | ${{ needs.secret-scanning.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| IAM Review Status | ${{ needs.iam-review-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Remediation Tracking | ${{ needs.remediation-tracking.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Review any failed checks above" >> $GITHUB_STEP_SUMMARY
+          echo "- Address critical and high severity findings" >> $GITHUB_STEP_SUMMARY
+          echo "- Update remediation tracker for new findings" >> $GITHUB_STEP_SUMMARY
+          echo "- Schedule quarterly IAM review if due" >> $GITHUB_STEP_SUMMARY

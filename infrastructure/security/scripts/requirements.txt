@@ -1,0 +1,5 @@
+# Security Scripts Requirements
+# Python dependencies for security audit and compliance tools
+
+# Core dependencies
+python-dateutil>=2.8.2

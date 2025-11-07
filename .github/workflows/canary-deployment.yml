@@ -1,0 +1,377 @@
+name: Canary Deployment with Automated Rollback
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'services/**'
+      - '.github/workflows/canary-deployment.yml'
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Service to deploy'
+        required: true
+        type: choice
+        options:
+          - web-api
+          - feature-engine
+          - insight-generator
+          - chart-renderer
+          - x-bot
+          - email-service
+      skip_canary:
+        description: 'Skip canary and deploy directly'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_REGION: us-central1
+  CANARY_TRAFFIC_PERCENTAGE: 10
+  CANARY_DURATION_MINUTES: 15
+  ERROR_RATE_THRESHOLD: 1.0
+  LATENCY_P95_THRESHOLD_MS: 60000
+
+jobs:
+  detect-changes:
+    name: Detect Service Changes
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.detect.outputs.services }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect changed services
+        id: detect
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "services=[\"${{ github.event.inputs.service }}\"]" >> $GITHUB_OUTPUT
+          else
+            CHANGED_SERVICES=$(git diff --name-only HEAD~1 HEAD | grep '^services/' | cut -d'/' -f2 | sort -u | jq -R -s -c 'split("\n")[:-1]')
+            if [ -z "$CHANGED_SERVICES" ] || [ "$CHANGED_SERVICES" == "[]" ]; then
+              echo "services=[]" >> $GITHUB_OUTPUT
+            else
+              echo "services=$CHANGED_SERVICES" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+  validate-openapi-schema:
+    name: Validate OpenAPI Schema Compatibility
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: contains(fromJson(needs.detect-changes.outputs.services), 'web-api')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        working-directory: services/web-api
+        run: pip install -r requirements.txt
+
+      - name: Export current OpenAPI spec
+        working-directory: services/web-api
+        run: |
+          python -c "
+          from src.main import app
+          import json
+          with open('../../openapi-current.json', 'w') as f:
+              json.dump(app.openapi(), f, indent=2)
+          "
+
+      - name: Get previous OpenAPI spec
+        run: |
+          git checkout HEAD~1 -- services/web-api/src/main.py || true
+          cd services/web-api
+          pip install -r requirements.txt
+          python -c "
+          from src.main import app
+          import json
+          with open('../../openapi-previous.json', 'w') as f:
+              json.dump(app.openapi(), f, indent=2)
+          " || echo "{}" > ../../openapi-previous.json
+
+      - name: Install OpenAPI diff tool
+        run: npm install -g openapi-diff
+
+      - name: Check for breaking changes
+        id: schema_check
+        run: |
+          if [ -f openapi-previous.json ] && [ "$(cat openapi-previous.json)" != "{}" ]; then
+            openapi-diff openapi-previous.json openapi-current.json --fail-on-incompatible || {
+              echo "breaking_changes=true" >> $GITHUB_OUTPUT
+              exit 1
+            }
+          fi
+          echo "breaking_changes=false" >> $GITHUB_OUTPUT
+
+      - name: Comment on PR if breaking changes
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '⚠️ **Breaking API Changes Detected**\n\nThe OpenAPI schema contains breaking changes. Please review the API compatibility before deploying.'
+            })
+
+  build-and-push:
+    name: Build and Push Container
+    runs-on: ubuntu-latest
+    needs: [detect-changes, validate-openapi-schema]
+    if: always() && needs.detect-changes.outputs.services != '[]' && (needs.validate-openapi-schema.result == 'success' || needs.validate-openapi-schema.result == 'skipped')
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker
+
+      - name: Build container image
+        working-directory: services/${{ matrix.service }}
+        run: |
+          IMAGE_TAG="gcr.io/${{ env.GCP_PROJECT_ID }}/utxoiq-${{ matrix.service }}:${{ github.sha }}"
+          docker build -t $IMAGE_TAG .
+          docker push $IMAGE_TAG
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Save image tag
+        run: echo "${{ env.IMAGE_TAG }}" > image-tag-${{ matrix.service }}.txt
+
+      - name: Upload image tag artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: image-tags
+          path: image-tag-${{ matrix.service }}.txt
+
+  canary-deploy:
+    name: Canary Deployment
+    runs-on: ubuntu-latest
+    needs: [detect-changes, build-and-push]
+    if: github.event.inputs.skip_canary != 'true'
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Download image tag
+        uses: actions/download-artifact@v3
+        with:
+          name: image-tags
+
+      - name: Get image tag
+        id: image
+        run: |
+          IMAGE_TAG=$(cat image-tag-${{ matrix.service }}.txt)
+          echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Deploy canary revision
+        id: deploy_canary
+        run: |
+          SERVICE_NAME="utxoiq-${{ matrix.service }}"
+          CANARY_REVISION="${SERVICE_NAME}-canary-${{ github.sha }}"
+          
+          # Deploy new revision with canary tag
+          gcloud run deploy $SERVICE_NAME \
+            --image ${{ steps.image.outputs.tag }} \
+            --region ${{ env.GCP_REGION }} \
+            --tag canary \
+            --no-traffic \
+            --revision-suffix canary-$(echo ${{ github.sha }} | cut -c1-7)
+          
+          # Get the canary revision name
+          CANARY_REV=$(gcloud run services describe $SERVICE_NAME \
+            --region ${{ env.GCP_REGION }} \
+            --format 'value(status.traffic[0].revisionName)' \
+            --filter 'status.traffic[0].tag=canary')
+          
+          echo "revision=$CANARY_REV" >> $GITHUB_OUTPUT
+          
+          # Route 10% traffic to canary
+          gcloud run services update-traffic $SERVICE_NAME \
+            --region ${{ env.GCP_REGION }} \
+            --to-revisions $CANARY_REV=${{ env.CANARY_TRAFFIC_PERCENTAGE }}
+
+      - name: Monitor canary metrics
+        id: monitor
+        run: |
+          echo "Monitoring canary for ${{ env.CANARY_DURATION_MINUTES }} minutes..."
+          
+          SERVICE_NAME="utxoiq-${{ matrix.service }}"
+          CANARY_REV="${{ steps.deploy_canary.outputs.revision }}"
+          START_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          
+          # Wait for canary duration
+          sleep $((${{ env.CANARY_DURATION_MINUTES }} * 60))
+          
+          END_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          
+          # Query Cloud Monitoring for error rate
+          ERROR_RATE=$(gcloud monitoring time-series list \
+            --filter "metric.type=\"run.googleapis.com/request_count\" AND resource.labels.service_name=\"$SERVICE_NAME\" AND resource.labels.revision_name=\"$CANARY_REV\" AND metric.labels.response_code_class=\"5xx\"" \
+            --format json \
+            --start-time $START_TIME \
+            --end-time $END_TIME \
+            | jq '[.[] | .points[].value.int64Value // 0] | add // 0')
+          
+          TOTAL_REQUESTS=$(gcloud monitoring time-series list \
+            --filter "metric.type=\"run.googleapis.com/request_count\" AND resource.labels.service_name=\"$SERVICE_NAME\" AND resource.labels.revision_name=\"$CANARY_REV\"" \
+            --format json \
+            --start-time $START_TIME \
+            --end-time $END_TIME \
+            | jq '[.[] | .points[].value.int64Value // 0] | add // 1')
+          
+          ERROR_RATE_PERCENT=$(echo "scale=2; ($ERROR_RATE / $TOTAL_REQUESTS) * 100" | bc)
+          
+          # Query for P95 latency
+          P95_LATENCY=$(gcloud monitoring time-series list \
+            --filter "metric.type=\"run.googleapis.com/request_latencies\" AND resource.labels.service_name=\"$SERVICE_NAME\" AND resource.labels.revision_name=\"$CANARY_REV\"" \
+            --format json \
+            --start-time $START_TIME \
+            --end-time $END_TIME \
+            | jq '[.[] | .points[].value.distributionValue.bucketCounts[-1] // 0] | max')
+          
+          echo "error_rate=$ERROR_RATE_PERCENT" >> $GITHUB_OUTPUT
+          echo "p95_latency=$P95_LATENCY" >> $GITHUB_OUTPUT
+          echo "total_requests=$TOTAL_REQUESTS" >> $GITHUB_OUTPUT
+          
+          # Check thresholds
+          if (( $(echo "$ERROR_RATE_PERCENT > ${{ env.ERROR_RATE_THRESHOLD }}" | bc -l) )); then
+            echo "rollback=true" >> $GITHUB_OUTPUT
+            echo "reason=Error rate ${ERROR_RATE_PERCENT}% exceeds threshold ${{ env.ERROR_RATE_THRESHOLD }}%" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          if [ "$P95_LATENCY" -gt "${{ env.LATENCY_P95_THRESHOLD_MS }}" ]; then
+            echo "rollback=true" >> $GITHUB_OUTPUT
+            echo "reason=P95 latency ${P95_LATENCY}ms exceeds threshold ${{ env.LATENCY_P95_THRESHOLD_MS }}ms" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          echo "rollback=false" >> $GITHUB_OUTPUT
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          SERVICE_NAME="utxoiq-${{ matrix.service }}"
+          
+          echo "Rolling back canary deployment..."
+          echo "Reason: ${{ steps.monitor.outputs.reason }}"
+          
+          # Route all traffic back to stable revision
+          gcloud run services update-traffic $SERVICE_NAME \
+            --region ${{ env.GCP_REGION }} \
+            --to-latest
+          
+          # Delete canary revision
+          gcloud run revisions delete ${{ steps.deploy_canary.outputs.revision }} \
+            --region ${{ env.GCP_REGION }} \
+            --quiet
+
+      - name: Promote canary to production
+        if: success()
+        run: |
+          SERVICE_NAME="utxoiq-${{ matrix.service }}"
+          
+          echo "Canary successful! Promoting to production..."
+          echo "Error rate: ${{ steps.monitor.outputs.error_rate }}%"
+          echo "P95 latency: ${{ steps.monitor.outputs.p95_latency }}ms"
+          echo "Total requests: ${{ steps.monitor.outputs.total_requests }}"
+          
+          # Route all traffic to canary (now production)
+          gcloud run services update-traffic $SERVICE_NAME \
+            --region ${{ env.GCP_REGION }} \
+            --to-revisions ${{ steps.deploy_canary.outputs.revision }}=100
+
+      - name: Create deployment status
+        if: always()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const status = '${{ job.status }}' === 'success' ? 'success' : 'failure';
+            const errorRate = '${{ steps.monitor.outputs.error_rate }}';
+            const latency = '${{ steps.monitor.outputs.p95_latency }}';
+            const rollback = '${{ steps.monitor.outputs.rollback }}' === 'true';
+            
+            const body = rollback 
+              ? `🔴 **Canary Deployment Failed - Rolled Back**\n\nService: ${{ matrix.service }}\nReason: ${{ steps.monitor.outputs.reason }}`
+              : `✅ **Canary Deployment Successful**\n\nService: ${{ matrix.service }}\nError Rate: ${errorRate}%\nP95 Latency: ${latency}ms`;
+            
+            github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: status,
+              context: `Canary Deployment - ${{ matrix.service }}`,
+              description: rollback ? 'Rolled back due to errors' : 'Successfully promoted'
+            });
+
+  direct-deploy:
+    name: Direct Deployment (Skip Canary)
+    runs-on: ubuntu-latest
+    needs: [detect-changes, build-and-push]
+    if: github.event.inputs.skip_canary == 'true'
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Download image tag
+        uses: actions/download-artifact@v3
+        with:
+          name: image-tags
+
+      - name: Get image tag
+        id: image
+        run: |
+          IMAGE_TAG=$(cat image-tag-${{ matrix.service }}.txt)
+          echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy utxoiq-${{ matrix.service }} \
+            --image ${{ steps.image.outputs.tag }} \
+            --region ${{ env.GCP_REGION }} \
+            --platform managed \
+            --allow-unauthenticated

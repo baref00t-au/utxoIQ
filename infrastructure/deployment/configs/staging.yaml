@@ -1,0 +1,95 @@
+gcp_project_id: utxoiq-staging
+gcp_region: us-central1
+domain: staging.utxoiq.com
+
+services:
+  web-api:
+    image: gcr.io/utxoiq-staging/utxoiq-web-api:latest
+    port: 8080
+    cpu: "2"
+    memory: 1Gi
+    min_instances: 1
+    max_instances: 10
+    timeout: 300
+    env_vars:
+      ENVIRONMENT: staging
+      LOG_LEVEL: INFO
+      CORS_ORIGINS: https://staging.utxoiq.com
+    secrets:
+      DATABASE_URL: database-url
+      FIREBASE_CREDENTIALS: firebase-credentials
+      STRIPE_SECRET_KEY: stripe-secret-key
+
+  feature-engine:
+    image: gcr.io/utxoiq-staging/utxoiq-feature-engine:latest
+    port: 8080
+    cpu: "4"
+    memory: 2Gi
+    min_instances: 1
+    max_instances: 10
+    timeout: 600
+    env_vars:
+      ENVIRONMENT: staging
+      LOG_LEVEL: INFO
+      CONFIDENCE_THRESHOLD: "0.6"
+    secrets:
+      BIGQUERY_CREDENTIALS: bigquery-credentials
+
+  insight-generator:
+    image: gcr.io/utxoiq-staging/utxoiq-insight-generator:latest
+    port: 8080
+    cpu: "2"
+    memory: 1Gi
+    min_instances: 1
+    max_instances: 5
+    timeout: 600
+    env_vars:
+      ENVIRONMENT: staging
+      LOG_LEVEL: INFO
+    secrets:
+      VERTEX_AI_CREDENTIALS: vertex-ai-credentials
+      BIGQUERY_CREDENTIALS: bigquery-credentials
+
+  chart-renderer:
+    image: gcr.io/utxoiq-staging/utxoiq-chart-renderer:latest
+    port: 8080
+    cpu: "1"
+    memory: 512Mi
+    min_instances: 0
+    max_instances: 5
+    timeout: 300
+    env_vars:
+      ENVIRONMENT: staging
+      LOG_LEVEL: INFO
+    secrets:
+      GCS_CREDENTIALS: gcs-credentials
+
+  x-bot:
+    image: gcr.io/utxoiq-staging/utxoiq-x-bot:latest
+    port: 8080
+    cpu: "1"
+    memory: 512Mi
+    min_instances: 0
+    max_instances: 2
+    timeout: 300
+    env_vars:
+      ENVIRONMENT: staging
+      LOG_LEVEL: INFO
+    secrets:
+      X_API_CREDENTIALS: x-api-credentials
+      DATABASE_URL: database-url
+
+  email-service:
+    image: gcr.io/utxoiq-staging/utxoiq-email-service:latest
+    port: 8080
+    cpu: "1"
+    memory: 512Mi
+    min_instances: 0
+    max_instances: 5
+    timeout: 300
+    env_vars:
+      ENVIRONMENT: staging
+      LOG_LEVEL: INFO
+    secrets:
+      SENDGRID_API_KEY: sendgrid-api-key
+      DATABASE_URL: database-url

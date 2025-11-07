@@ -1,0 +1,38 @@
+[
+  {
+    "name": "feedback_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Unique identifier for feedback"
+  },
+  {
+    "name": "insight_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "ID of the insight being rated"
+  },
+  {
+    "name": "user_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "ID of the user providing feedback"
+  },
+  {
+    "name": "rating",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Rating: useful or not_useful"
+  },
+  {
+    "name": "timestamp",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "When feedback was submitted"
+  },
+  {
+    "name": "comment",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Optional user comment"
+  }
+]

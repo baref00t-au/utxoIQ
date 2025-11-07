@@ -1,0 +1,81 @@
+groups:
+  - name: utxoiq_sla_alerts
+    interval: 1m
+    rules:
+      # Block-to-Insight Latency Alert
+      - alert: HighBlockToInsightLatency
+        expr: histogram_quantile(0.95, sum(rate(block_to_insight_latency_seconds_bucket[5m])) by (le)) > 60
+        for: 5m
+        labels:
+          severity: critical
+          component: feature-engine
+          sla: latency
+        annotations:
+          summary: "Block-to-insight P95 latency exceeds 60 seconds"
+          description: "P95 latency is {{ $value }}s, exceeding the 60-second SLA threshold for {{ $labels.instance }}"
+          runbook_url: "https://docs.utxoiq.com/runbooks/high-latency"
+
+      # API Uptime Alert
+      - alert: LowAPIUptime
+        expr: (sum(rate(http_requests_total{job="web-api",code=~"2.."}[5m])) / sum(rate(http_requests_total{job="web-api"}[5m]))) * 100 < 99.9
+        for: 5m
+        labels:
+          severity: critical
+          component: web-api
+          sla: uptime
+        annotations:
+          summary: "API uptime below 99.9% SLA"
+          description: "API uptime is {{ $value }}%, below the 99.9% SLA target"
+          runbook_url: "https://docs.utxoiq.com/runbooks/low-uptime"
+
+      # WebSocket Disconnection Rate Alert
+      - alert: HighWebSocketDisconnectionRate
+        expr: (sum(rate(websocket_disconnections_total[5m])) / sum(rate(websocket_connections_total[5m]))) * 100 > 5
+        for: 10m
+        labels:
+          severity: warning
+          component: web-api
+          sla: websocket
+        annotations:
+          summary: "WebSocket disconnection rate exceeds 5%"
+          description: "WebSocket disconnection rate is {{ $value }}%, exceeding the 5% threshold"
+          runbook_url: "https://docs.utxoiq.com/runbooks/websocket-stability"
+
+      # Duplicate Signal Rate Alert
+      - alert: HighDuplicateSignalRate
+        expr: (sum(rate(duplicate_signals_total[5m])) / sum(rate(signals_generated_total[5m]))) * 100 > 0.5
+        for: 15m
+        labels:
+          severity: warning
+          component: feature-engine
+          sla: data-quality
+        annotations:
+          summary: "Duplicate signal rate exceeds 0.5%"
+          description: "Duplicate signal rate is {{ $value }}%, exceeding the 0.5% threshold"
+          runbook_url: "https://docs.utxoiq.com/runbooks/duplicate-signals"
+
+      # API Error Rate Alert
+      - alert: HighAPIErrorRate
+        expr: (sum(rate(http_requests_total{job="web-api",code=~"5.."}[5m])) / sum(rate(http_requests_total{job="web-api"}[5m]))) * 100 > 1
+        for: 5m
+        labels:
+          severity: critical
+          component: web-api
+          sla: reliability
+        annotations:
+          summary: "API error rate exceeds 1%"
+          description: "API error rate is {{ $value }}%, exceeding the 1% threshold for {{ $labels.instance }}"
+          runbook_url: "https://docs.utxoiq.com/runbooks/high-error-rate"
+
+      # Service Health Check Alert
+      - alert: ServiceDown
+        expr: up{job=~"feature-engine|insight-generator|chart-renderer|web-api|x-bot|email-service"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: "{{ $labels.job }}"
+          sla: availability
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Service {{ $labels.job }} on {{ $labels.instance }} has been down for more than 2 minutes"
+          runbook_url: "https://docs.utxoiq.com/runbooks/service-down"

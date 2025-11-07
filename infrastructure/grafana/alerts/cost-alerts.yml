@@ -1,0 +1,81 @@
+groups:
+  - name: utxoiq_cost_alerts
+    interval: 5m
+    rules:
+      # Daily AI Inference Cost Alert
+      - alert: HighDailyAICost
+        expr: sum(increase(ai_inference_cost_usd[24h])) > 1000
+        for: 10m
+        labels:
+          severity: warning
+          component: insight-generator
+          category: cost
+        annotations:
+          summary: "Daily AI inference cost exceeds $1000 budget"
+          description: "Daily AI inference cost is ${{ $value }}, exceeding the $1000 budget threshold"
+          runbook_url: "https://docs.utxoiq.com/runbooks/high-ai-cost"
+
+      # Daily BigQuery Cost Alert
+      - alert: HighDailyBigQueryCost
+        expr: sum(increase(bigquery_cost_usd[24h])) > 500
+        for: 10m
+        labels:
+          severity: warning
+          component: data-ingestion
+          category: cost
+        annotations:
+          summary: "Daily BigQuery cost exceeds $500 budget"
+          description: "Daily BigQuery cost is ${{ $value }}, exceeding the $500 budget threshold"
+          runbook_url: "https://docs.utxoiq.com/runbooks/high-bigquery-cost"
+
+      # Hourly AI Cost Spike Alert
+      - alert: AIInferenceCostSpike
+        expr: sum(rate(ai_inference_cost_usd[1h])) * 3600 > 50
+        for: 5m
+        labels:
+          severity: warning
+          component: insight-generator
+          category: cost
+        annotations:
+          summary: "Hourly AI inference cost spike detected"
+          description: "Hourly AI inference cost is ${{ $value }}, indicating a potential cost spike"
+          runbook_url: "https://docs.utxoiq.com/runbooks/ai-cost-spike"
+
+      # BigQuery Query Cost Alert
+      - alert: ExpensiveBigQueryQuery
+        expr: bigquery_query_cost_usd > 10
+        for: 1m
+        labels:
+          severity: info
+          component: data-ingestion
+          category: cost
+        annotations:
+          summary: "Expensive BigQuery query detected"
+          description: "Query {{ $labels.query_id }} cost ${{ $value }}, exceeding $10 threshold"
+          runbook_url: "https://docs.utxoiq.com/runbooks/expensive-query"
+
+      # Cost per Insight Trend Alert
+      - alert: IncreasingCostPerInsight
+        expr: deriv(sum(ai_inference_cost_usd) / sum(insights_generated_total)[7d:1h]) > 0.01
+        for: 1h
+        labels:
+          severity: info
+          component: insight-generator
+          category: cost-optimization
+        annotations:
+          summary: "Cost per insight is trending upward"
+          description: "Cost per insight has increased by ${{ $value }} over the last 7 days"
+          runbook_url: "https://docs.utxoiq.com/runbooks/cost-optimization"
+
+      # Total Daily Cost Alert (Combined)
+      - alert: HighTotalDailyCost
+        expr: sum(increase(ai_inference_cost_usd[24h])) + sum(increase(bigquery_cost_usd[24h])) > 1500
+        for: 10m
+        labels:
+          severity: critical
+          component: platform
+          category: cost
+        annotations:
+          summary: "Total daily cost exceeds $1500 budget"
+          description: "Combined daily cost (AI + BigQuery) is ${{ $value }}, exceeding the $1500 total budget"
+          runbook_url: "https://docs.utxoiq.com/runbooks/high-total-cost"

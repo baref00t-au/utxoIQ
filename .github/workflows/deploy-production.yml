@@ -1,0 +1,480 @@
+name: Production Deployment Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'services/**'
+      - 'frontend/**'
+      - '.github/workflows/deploy-production.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+        default: staging
+      services:
+        description: 'Services to deploy (comma-separated, or "all")'
+        required: true
+        default: all
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_REGION: us-central1
+  REGISTRY: gcr.io
+
+jobs:
+  setup:
+    name: Setup Deployment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.config.outputs.environment }}
+      services: ${{ steps.config.outputs.services }}
+      version: ${{ steps.config.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure deployment
+        id: config
+        run: |
+          # Determine environment
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+          else
+            ENV="staging"
+          fi
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          
+          # Determine services to deploy
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            if [ "${{ github.event.inputs.services }}" == "all" ]; then
+              SERVICES='["web-api","feature-engine","insight-generator","chart-renderer","x-bot","email-service"]'
+            else
+              SERVICES=$(echo '${{ github.event.inputs.services }}' | jq -R -c 'split(",")')
+            fi
+          else
+            # Auto-detect changed services
+            CHANGED=$(git diff --name-only HEAD~1 HEAD | grep '^services/' | cut -d'/' -f2 | sort -u | jq -R -s -c 'split("\n")[:-1]')
+            if [ -z "$CHANGED" ] || [ "$CHANGED" == "[]" ]; then
+              SERVICES='[]'
+            else
+              SERVICES="$CHANGED"
+            fi
+          fi
+          echo "services=$SERVICES" >> $GITHUB_OUTPUT
+          
+          # Generate version
+          VERSION="${{ github.sha }}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+  export-openapi:
+    name: Export OpenAPI Specification
+    runs-on: ubuntu-latest
+    needs: setup
+    if: contains(fromJson(needs.setup.outputs.services), 'web-api')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        working-directory: services/web-api
+        run: pip install -r requirements.txt
+
+      - name: Export OpenAPI spec
+        working-directory: services/web-api
+        run: |
+          python -c "
+          from src.main import app
+          import json
+          spec = app.openapi()
+          spec['info']['version'] = '${{ needs.setup.outputs.version }}'
+          with open('../../openapi-${{ needs.setup.outputs.version }}.json', 'w') as f:
+              json.dump(spec, f, indent=2)
+          "
+
+      - name: Upload OpenAPI spec
+        uses: actions/upload-artifact@v3
+        with:
+          name: openapi-spec
+          path: openapi-${{ needs.setup.outputs.version }}.json
+
+      - name: Store OpenAPI spec in GCS
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Upload to GCS
+        run: |
+          gsutil cp openapi-${{ needs.setup.outputs.version }}.json \
+            gs://${{ env.GCP_PROJECT_ID }}-openapi-specs/v1/openapi-${{ needs.setup.outputs.version }}.json
+          
+          # Also update latest
+          gsutil cp openapi-${{ needs.setup.outputs.version }}.json \
+            gs://${{ env.GCP_PROJECT_ID }}-openapi-specs/v1/openapi-latest.json
+
+  validate-openapi:
+    name: Validate OpenAPI Compatibility
+    runs-on: ubuntu-latest
+    needs: [setup, export-openapi]
+    if: contains(fromJson(needs.setup.outputs.services), 'web-api')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download current spec
+        uses: actions/download-artifact@v3
+        with:
+          name: openapi-spec
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Download previous spec
+        run: |
+          gsutil cp gs://${{ env.GCP_PROJECT_ID }}-openapi-specs/v1/openapi-latest.json \
+            openapi-previous.json || echo '{}' > openapi-previous.json
+
+      - name: Install OpenAPI diff tool
+        run: npm install -g openapi-diff
+
+      - name: Check for breaking changes
+        id: diff
+        continue-on-error: true
+        run: |
+          if [ "$(cat openapi-previous.json)" != "{}" ]; then
+            openapi-diff openapi-previous.json openapi-${{ needs.setup.outputs.version }}.json \
+              --json > openapi-diff.json
+            
+            # Check if there are breaking changes
+            BREAKING=$(jq '.breakingChanges | length' openapi-diff.json)
+            if [ "$BREAKING" -gt 0 ]; then
+              echo "breaking=true" >> $GITHUB_OUTPUT
+              echo "Breaking changes detected: $BREAKING"
+              jq '.breakingChanges' openapi-diff.json
+              exit 1
+            else
+              echo "breaking=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "breaking=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload diff report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: openapi-diff
+          path: openapi-diff.json
+
+      - name: Comment on PR
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const diff = JSON.parse(fs.readFileSync('openapi-diff.json', 'utf8'));
+            const breaking = diff.breakingChanges || [];
+            
+            let body = '⚠️ **Breaking API Changes Detected**\n\n';
+            body += `Found ${breaking.length} breaking change(s):\n\n`;
+            
+            breaking.forEach((change, i) => {
+              body += `${i + 1}. **${change.type}**: ${change.path}\n`;
+              body += `   - ${change.description}\n\n`;
+            });
+            
+            body += '\n⚠️ Deployment blocked until breaking changes are resolved.';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  build-images:
+    name: Build Container Images
+    runs-on: ubuntu-latest
+    needs: [setup, validate-openapi]
+    if: always() && needs.setup.outputs.services != '[]' && (needs.validate-openapi.result == 'success' || needs.validate-openapi.result == 'skipped')
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.setup.outputs.services) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker
+
+      - name: Build and push image
+        working-directory: services/${{ matrix.service }}
+        run: |
+          IMAGE_NAME="${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/utxoiq-${{ matrix.service }}"
+          IMAGE_TAG="${IMAGE_NAME}:${{ needs.setup.outputs.version }}"
+          IMAGE_LATEST="${IMAGE_NAME}:latest"
+          
+          docker build \
+            --build-arg VERSION=${{ needs.setup.outputs.version }} \
+            --build-arg BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
+            --build-arg GIT_SHA=${{ github.sha }} \
+            -t $IMAGE_TAG \
+            -t $IMAGE_LATEST \
+            .
+          
+          docker push $IMAGE_TAG
+          docker push $IMAGE_LATEST
+          
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Save image metadata
+        run: |
+          echo "${{ env.IMAGE_TAG }}" > image-${{ matrix.service }}.txt
+
+      - name: Upload image metadata
+        uses: actions/upload-artifact@v3
+        with:
+          name: image-metadata
+          path: image-${{ matrix.service }}.txt
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [setup, build-images]
+    if: needs.setup.outputs.environment == 'staging'
+    environment:
+      name: staging
+      url: https://staging.utxoiq.com
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.setup.outputs.services) }}
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Download image metadata
+        uses: actions/download-artifact@v3
+        with:
+          name: image-metadata
+
+      - name: Deploy to Cloud Run
+        run: |
+          IMAGE_TAG=$(cat image-${{ matrix.service }}.txt)
+          
+          gcloud run deploy utxoiq-${{ matrix.service }}-staging \
+            --image $IMAGE_TAG \
+            --region ${{ env.GCP_REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --set-env-vars "ENVIRONMENT=staging,VERSION=${{ needs.setup.outputs.version }}" \
+            --tag staging
+
+  deploy-production:
+    name: Deploy to Production (Blue-Green)
+    runs-on: ubuntu-latest
+    needs: [setup, build-images]
+    if: needs.setup.outputs.environment == 'production'
+    environment:
+      name: production
+      url: https://utxoiq.com
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.setup.outputs.services) }}
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Download image metadata
+        uses: actions/download-artifact@v3
+        with:
+          name: image-metadata
+
+      - name: Blue-Green Deployment
+        run: |
+          IMAGE_TAG=$(cat image-${{ matrix.service }}.txt)
+          SERVICE_NAME="utxoiq-${{ matrix.service }}"
+          
+          # Deploy new revision (green) with no traffic
+          gcloud run deploy $SERVICE_NAME \
+            --image $IMAGE_TAG \
+            --region ${{ env.GCP_REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --no-traffic \
+            --tag green \
+            --revision-suffix green-$(echo ${{ needs.setup.outputs.version }} | cut -c1-7) \
+            --set-env-vars "ENVIRONMENT=production,VERSION=${{ needs.setup.outputs.version }}"
+          
+          # Get the new revision name
+          GREEN_REVISION=$(gcloud run services describe $SERVICE_NAME \
+            --region ${{ env.GCP_REGION }} \
+            --format 'value(status.traffic[0].revisionName)' \
+            --filter 'status.traffic[0].tag=green')
+          
+          echo "GREEN_REVISION=$GREEN_REVISION" >> $GITHUB_ENV
+          
+          # Gradually shift traffic: 0% -> 25% -> 50% -> 100%
+          echo "Shifting 25% traffic to green..."
+          gcloud run services update-traffic $SERVICE_NAME \
+            --region ${{ env.GCP_REGION }} \
+            --to-revisions $GREEN_REVISION=25
+          
+          sleep 120  # Wait 2 minutes
+          
+          echo "Shifting 50% traffic to green..."
+          gcloud run services update-traffic $SERVICE_NAME \
+            --region ${{ env.GCP_REGION }} \
+            --to-revisions $GREEN_REVISION=50
+          
+          sleep 120  # Wait 2 minutes
+          
+          echo "Shifting 100% traffic to green..."
+          gcloud run services update-traffic $SERVICE_NAME \
+            --region ${{ env.GCP_REGION }} \
+            --to-revisions $GREEN_REVISION=100
+
+      - name: Tag stable revision
+        run: |
+          SERVICE_NAME="utxoiq-${{ matrix.service }}"
+          
+          # Tag the new revision as stable
+          gcloud run services update-traffic $SERVICE_NAME \
+            --region ${{ env.GCP_REGION }} \
+            --update-tags stable=${{ env.GREEN_REVISION }}
+
+  generate-sdks:
+    name: Generate and Publish SDKs
+    runs-on: ubuntu-latest
+    needs: [setup, export-openapi, deploy-production]
+    if: contains(fromJson(needs.setup.outputs.services), 'web-api') && needs.setup.outputs.environment == 'production'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download OpenAPI spec
+        uses: actions/download-artifact@v3
+        with:
+          name: openapi-spec
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Generate Python SDK
+        working-directory: sdks/python
+        run: |
+          pip install -e ".[dev]"
+          # SDK generation happens via openapi-generator or similar
+          # Update version in setup.py
+          sed -i 's/version=".*"/version="${{ needs.setup.outputs.version }}"/' setup.py
+
+      - name: Generate JavaScript SDK
+        working-directory: sdks/javascript
+        run: |
+          npm ci
+          # SDK generation happens via openapi-generator or similar
+          # Update version in package.json
+          npm version ${{ needs.setup.outputs.version }} --no-git-tag-version
+
+      - name: Test Python SDK
+        working-directory: sdks/python
+        run: pytest
+
+      - name: Test JavaScript SDK
+        working-directory: sdks/javascript
+        run: npm test
+
+      - name: Publish Python SDK to PyPI
+        if: needs.setup.outputs.environment == 'production'
+        working-directory: sdks/python
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          pip install build twine
+          python -m build
+          twine upload dist/*
+
+      - name: Publish JavaScript SDK to npm
+        if: needs.setup.outputs.environment == 'production'
+        working-directory: sdks/javascript
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm config set //registry.npmjs.org/:_authToken=$NODE_AUTH_TOKEN
+          npm publish --access public
+
+  notify:
+    name: Notify Deployment Status
+    runs-on: ubuntu-latest
+    needs: [setup, deploy-staging, deploy-production]
+    if: always()
+    steps:
+      - name: Create deployment summary
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: ${{ needs.setup.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ needs.setup.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Services**: ${{ needs.setup.outputs.services }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create GitHub deployment
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const deployment = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.sha,
+              environment: '${{ needs.setup.outputs.environment }}',
+              description: 'Deployment via GitHub Actions',
+              auto_merge: false,
+              required_contexts: []
+            });
+            
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.data.id,
+              state: '${{ job.status }}' === 'success' ? 'success' : 'failure',
+              description: 'Deployment ${{ job.status }}',
+              environment_url: 'https://${{ needs.setup.outputs.environment }}.utxoiq.com'
+            });

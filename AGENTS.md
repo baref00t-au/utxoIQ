@@ -84,6 +84,45 @@ gcloud run deploy utxoiq-frontend --source .
 - Always include proper indexing
 - Validate at API and database levels
 
+## File Organization
+
+### Root Directory Rules
+- **DO NOT** create documents, scripts, or temporary files in the root directory
+- **Use organized directories**:
+  - `docs/` - All documentation files (guides, specs, notes)
+  - `docs/specs/` - Specification documents with numbered format (e.g., `utxo-001/`, `utxo-002/`)
+  - `scripts/` - All scripts (setup, deployment, utilities)
+  - `temp/` - Temporary files and test outputs
+- **Root directory should only contain**:
+  - Core config files (`.env`, `docker-compose.yml`, `package.json`, etc.)
+  - README.md
+  - .gitignore
+  - License files
+
+### Specification Documentation
+- **Kiro-managed specs**: Keep in `.kiro/specs/` directory (managed by Kiro IDE)
+  - These contain `requirements.md`, `design.md`, and `tasks.md`
+  - Do NOT move or duplicate these files
+- **Additional spec documentation**: Use `docs/specs/` for supplementary documentation
+  - Implementation notes, research, diagrams, etc.
+  - Use numbered format: `utxo-001/`, `utxo-002/`
+- **Spec references**: Reference Kiro specs by their directory name (e.g., "See .kiro/specs/utxoiq-mvp/")
+
+### Examples
+✅ **Correct**:
+- `.kiro/specs/utxoiq-mvp/requirements.md` (Kiro-managed spec)
+- `docs/api-guide.md`
+- `docs/specs/utxo-001/implementation-notes.md` (supplementary docs)
+- `scripts/test-connection.py`
+- `scripts/setup/local-dev.sh`
+- `temp/test-output.json`
+
+❌ **Incorrect**:
+- `test-bitcoin-connection.bat` (should be `scripts/test-bitcoin-connection.bat`)
+- `IMPLEMENTATION_SUMMARY.md` (should be `docs/task-1-implementation.md`)
+- `test-output.json` (should be `temp/test-output.json`)
+- `setup.sh` (should be `scripts/setup.sh`)
+
 ## Naming Conventions
 
 ### Files & Directories

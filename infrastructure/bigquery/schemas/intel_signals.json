@@ -1,0 +1,68 @@
+[
+  {
+    "name": "signal_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Unique identifier for the signal"
+  },
+  {
+    "name": "type",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Signal type: mempool, exchange, miner, whale, predictive"
+  },
+  {
+    "name": "strength",
+    "type": "FLOAT",
+    "mode": "REQUIRED",
+    "description": "Signal strength (0-1)"
+  },
+  {
+    "name": "block_height",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "Block height where signal was detected"
+  },
+  {
+    "name": "data_json",
+    "type": "JSON",
+    "mode": "REQUIRED",
+    "description": "Signal-specific data payload"
+  },
+  {
+    "name": "processed_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "Timestamp when signal was processed"
+  },
+  {
+    "name": "is_predictive",
+    "type": "BOOLEAN",
+    "mode": "NULLABLE",
+    "description": "Whether this is a predictive signal"
+  },
+  {
+    "name": "prediction_confidence_interval",
+    "type": "RECORD",
+    "mode": "NULLABLE",
+    "description": "Confidence interval for predictions",
+    "fields": [
+      {
+        "name": "lower",
+        "type": "FLOAT",
+        "mode": "REQUIRED"
+      },
+      {
+        "name": "upper",
+        "type": "FLOAT",
+        "mode": "REQUIRED"
+      }
+    ]
+  },
+  {
+    "name": "model_version",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Model version for predictive signals"
+  }
+]
