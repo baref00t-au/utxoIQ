@@ -9,7 +9,9 @@ import sys
 import time
 import argparse
 import logging
+import json
 from datetime import datetime
+from pathlib import Path
 
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'services', 'data-ingestion', 'src'))
@@ -22,22 +24,127 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 from bitcoin_rpc import BitcoinRPCClient, BlockDataNormalizer
+from bigquery_writer import BigQueryWriter
+from bigquery_client import BigQueryClient
 
-# Use mock Pub/Sub for local development (Python 3.14 compatibility)
-try:
-    from pubsub_streamer import PubSubStreamer
-except (ImportError, TypeError) as e:
-    logger.warning(f"Could not import real Pub/Sub client: {e}")
-    logger.info("Using mock Pub/Sub streamer for local development")
-    from pubsub_streamer_mock import PubSubStreamer
+
+class BigQueryStorage:
+    """Store blocks and transactions to BigQuery"""
+    
+    def __init__(self):
+        self.bq_client = BigQueryClient()
+        self.blocks_buffer = []
+        self.transactions_buffer = []
+        self.buffer_size = 100  # Stream every 100 blocks
+        
+        # Verify tables exist
+        if not self.bq_client.check_tables_exist():
+            raise RuntimeError("BigQuery tables not found. Run setup-bigquery.py first.")
+        
+        logger.info(f"Streaming data to BigQuery: {self.bq_client.project_id}")
+    
+    def save_block(self, block_data: dict):
+        """Buffer block data for streaming"""
+        self.blocks_buffer.append(block_data)
+        
+        # Flush if buffer is full
+        if len(self.blocks_buffer) >= self.buffer_size:
+            self.flush_blocks()
+    
+    def save_transactions(self, transactions: list, block_height: int):
+        """Buffer transactions for streaming"""
+        if not transactions:
+            return
+        
+        self.transactions_buffer.extend(transactions)
+        
+        # Flush if buffer is full
+        if len(self.transactions_buffer) >= self.buffer_size * 10:  # Larger buffer for txs
+            self.flush_transactions()
+    
+    def flush_blocks(self):
+        """Flush blocks buffer to BigQuery"""
+        if not self.blocks_buffer:
+            return
+        
+        try:
+            count = self.bq_client.stream_blocks(self.blocks_buffer)
+            logger.info(f"Streamed {count} blocks to BigQuery")
+            self.blocks_buffer = []
+        except Exception as e:
+            logger.error(f"Failed to stream blocks: {str(e)}")
+            # Keep buffer for retry
+    
+    def flush_transactions(self):
+        """Flush transactions buffer to BigQuery"""
+        if not self.transactions_buffer:
+            return
+        
+        try:
+            count = self.bq_client.stream_transactions(self.transactions_buffer)
+            logger.info(f"Streamed {count} transactions to BigQuery")
+            self.transactions_buffer = []
+        except Exception as e:
+            logger.error(f"Failed to stream transactions: {str(e)}")
+            # Keep buffer for retry
+    
+    def flush_all(self):
+        """Flush all buffers"""
+        self.flush_blocks()
+        self.flush_transactions()
+
+
+class FileStorage:
+    """Store blocks and transactions to local files"""
+    
+    def __init__(self, output_dir: str = "data/backfill"):
+        self.output_dir = Path(output_dir)
+        self.blocks_dir = self.output_dir / "blocks"
+        self.transactions_dir = self.output_dir / "transactions"
+        
+        # Create directories
+        self.blocks_dir.mkdir(parents=True, exist_ok=True)
+        self.transactions_dir.mkdir(parents=True, exist_ok=True)
+        
+        logger.info(f"Storing data to: {self.output_dir.absolute()}")
+    
+    def save_block(self, block_data: dict):
+        """Save block data to JSON file"""
+        block_height = block_data.get('height')
+        # Group blocks in subdirectories by 10k blocks
+        subdir = self.blocks_dir / f"{(block_height // 10000) * 10000:07d}"
+        subdir.mkdir(exist_ok=True)
+        
+        filepath = subdir / f"block_{block_height:07d}.json"
+        with open(filepath, 'w') as f:
+            json.dump(block_data, f, indent=2)
+    
+    def save_transactions(self, transactions: list, block_height: int):
+        """Save transactions to JSON file"""
+        if not transactions:
+            return
+        
+        # Group transactions in subdirectories by 10k blocks
+        subdir = self.transactions_dir / f"{(block_height // 10000) * 10000:07d}"
+        subdir.mkdir(exist_ok=True)
+        
+        filepath = subdir / f"txs_{block_height:07d}.json"
+        with open(filepath, 'w') as f:
+            json.dump(transactions, f, indent=2)
 
 
 class BlockBackfiller:
     """Backfill historical blocks"""
     
-    def __init__(self, batch_size: int = 100):
+    def __init__(self, batch_size: int = 100, use_bigquery: bool = True):
         self.rpc_client = BitcoinRPCClient()
-        self.pubsub_streamer = PubSubStreamer()
+        self.use_bigquery = use_bigquery
+        
+        if use_bigquery:
+            self.storage = BigQueryStorage()
+        else:
+            self.storage = FileStorage("data/backfill")
+        
         self.normalizer = BlockDataNormalizer()
         self.batch_size = batch_size
         
@@ -94,10 +201,19 @@ class BlockBackfiller:
                 
                 current = batch_end + 1
             
+            # Flush any remaining data
+            if hasattr(self.storage, 'flush_all'):
+                logger.info("Flushing remaining data to BigQuery...")
+                self.storage.flush_all()
+            
             self._print_summary(start_height, end_height)
             
         except KeyboardInterrupt:
             logger.info("\nBackfill interrupted by user")
+            # Flush any remaining data
+            if hasattr(self.storage, 'flush_all'):
+                logger.info("Flushing remaining data to BigQuery...")
+                self.storage.flush_all()
             self._print_summary(start_height, current - 1)
         except Exception as e:
             logger.error(f"Backfill failed: {str(e)}", exc_info=True)
@@ -111,9 +227,9 @@ class BlockBackfiller:
                 block_hash = self.rpc_client.get_block_hash(height)
                 raw_block = self.rpc_client.get_block(block_hash, verbosity=2)
                 
-                # Normalize and publish block
+                # Normalize and save block
                 normalized_block = self.normalizer.normalize_block(raw_block)
-                self.pubsub_streamer.publish_block(normalized_block)
+                self.storage.save_block(normalized_block)
                 
                 # Process transactions
                 transactions = []
@@ -122,14 +238,14 @@ class BlockBackfiller:
                     transactions.append(normalized_tx)
                 
                 if transactions:
-                    self.pubsub_streamer.publish_transactions(transactions, height)
+                    self.storage.save_transactions(transactions, height)
                 
                 self.blocks_processed += 1
                 self.transactions_processed += len(transactions)
                 
                 # Log every 100 blocks
                 if self.blocks_processed % 100 == 0:
-                    logger.debug(f"Processed block {height} ({len(transactions)} txs)")
+                    logger.info(f"Saved block {height} ({len(transactions)} txs)")
                 
             except Exception as e:
                 logger.error(f"Error processing block {height}: {str(e)}")
@@ -197,6 +313,11 @@ Examples:
         default=100,
         help='Number of blocks to process per batch (default: 100)'
     )
+    parser.add_argument(
+        '--use-files',
+        action='store_true',
+        help='Write to local files instead of BigQuery (default: stream to BigQuery)'
+    )
     
     args = parser.parse_args()
     
@@ -205,7 +326,8 @@ Examples:
     load_dotenv()
     
     # Determine block range
-    backfiller = BlockBackfiller(batch_size=args.batch_size)
+    use_bigquery = not args.use_files
+    backfiller = BlockBackfiller(batch_size=args.batch_size, use_bigquery=use_bigquery)
     rpc_client = BitcoinRPCClient()
     current_height = rpc_client.get_block_count()
     
@@ -224,11 +346,13 @@ Examples:
     
     # Confirm with user
     total_blocks = end_height - start_height + 1
+    storage_type = "local files" if args.use_files else "BigQuery"
     print(f"\nBackfill Configuration:")
     print(f"  Start height: {start_height:,}")
     print(f"  End height: {end_height:,}")
     print(f"  Total blocks: {total_blocks:,}")
     print(f"  Batch size: {args.batch_size}")
+    print(f"  Storage: {storage_type}")
     print(f"  Current tip: {current_height:,}")
     
     if total_blocks > 10000:

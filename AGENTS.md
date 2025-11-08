@@ -6,8 +6,12 @@ utxoIQ is an AI-powered Bitcoin blockchain intelligence platform that transforms
 
 ## Setup Commands
 
+**IMPORTANT: Use Python 3.12.x (NOT 3.14+)**
+Python 3.14 is too new and many dependencies are not yet compatible.
+
 ```bash
-# Backend services (Python/FastAPI)
+# Backend services (Python 3.12/FastAPI)
+python --version  # Should show Python 3.12.x
 pip install -r requirements.txt
 python -m uvicorn main:app --reload
 

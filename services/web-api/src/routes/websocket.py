@@ -4,6 +4,7 @@ import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from typing import Optional
 from ..websocket import connection_manager
+from ..websocket.monitoring import monitoring_websocket_handler
 from ..middleware.auth import auth
 
 logger = logging.getLogger(__name__)
@@ -77,6 +78,16 @@ async def websocket_insights(
     finally:
         # Clean up connection
         await connection_manager.disconnect(connection_id)
+
+
+@router.websocket("/ws/monitoring")
+async def websocket_monitoring(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time system monitoring.
+    
+    Streams system status, backfill progress, and processing metrics.
+    """
+    await monitoring_websocket_handler(websocket)
 
 
 @router.get("/ws/stats")

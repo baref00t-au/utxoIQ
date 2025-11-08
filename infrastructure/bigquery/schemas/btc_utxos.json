@@ -1,0 +1,86 @@
+[
+  {
+    "name": "txid",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Transaction ID that created this UTXO"
+  },
+  {
+    "name": "vout",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "Output index in the transaction"
+  },
+  {
+    "name": "block_height",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "Block height where UTXO was created"
+  },
+  {
+    "name": "timestamp",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "When UTXO was created"
+  },
+  {
+    "name": "value",
+    "type": "NUMERIC",
+    "mode": "REQUIRED",
+    "description": "UTXO value in BTC"
+  },
+  {
+    "name": "address",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Bitcoin address (if standard output)"
+  },
+  {
+    "name": "script_type",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Script type (p2pkh, p2sh, p2wpkh, p2wsh, etc.)"
+  },
+  {
+    "name": "script_pubkey",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Script public key (hex)"
+  },
+  {
+    "name": "spent",
+    "type": "BOOLEAN",
+    "mode": "REQUIRED",
+    "description": "Whether this UTXO has been spent"
+  },
+  {
+    "name": "spent_txid",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Transaction ID that spent this UTXO"
+  },
+  {
+    "name": "spent_block_height",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Block height where UTXO was spent"
+  },
+  {
+    "name": "spent_timestamp",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE",
+    "description": "When UTXO was spent"
+  },
+  {
+    "name": "lifespan_blocks",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Number of blocks UTXO existed before being spent"
+  },
+  {
+    "name": "is_coinbase",
+    "type": "BOOLEAN",
+    "mode": "REQUIRED",
+    "description": "Whether this UTXO came from a coinbase transaction"
+  }
+]

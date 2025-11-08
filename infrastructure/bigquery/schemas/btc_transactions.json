@@ -1,0 +1,98 @@
+[
+  {
+    "name": "txid",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Transaction ID (hash)"
+  },
+  {
+    "name": "block_height",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "Block height where transaction was included"
+  },
+  {
+    "name": "block_hash",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Block hash where transaction was included"
+  },
+  {
+    "name": "timestamp",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "Block timestamp"
+  },
+  {
+    "name": "version",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "Transaction version"
+  },
+  {
+    "name": "size",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "Transaction size in bytes"
+  },
+  {
+    "name": "vsize",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "Virtual transaction size"
+  },
+  {
+    "name": "weight",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "Transaction weight"
+  },
+  {
+    "name": "locktime",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "Transaction locktime"
+  },
+  {
+    "name": "input_count",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "Number of inputs"
+  },
+  {
+    "name": "output_count",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "Number of outputs"
+  },
+  {
+    "name": "input_value",
+    "type": "NUMERIC",
+    "mode": "REQUIRED",
+    "description": "Total input value in BTC"
+  },
+  {
+    "name": "output_value",
+    "type": "NUMERIC",
+    "mode": "REQUIRED",
+    "description": "Total output value in BTC"
+  },
+  {
+    "name": "fee",
+    "type": "NUMERIC",
+    "mode": "REQUIRED",
+    "description": "Transaction fee in BTC"
+  },
+  {
+    "name": "fee_rate",
+    "type": "NUMERIC",
+    "mode": "REQUIRED",
+    "description": "Fee rate in sat/vB"
+  },
+  {
+    "name": "is_coinbase",
+    "type": "BOOLEAN",
+    "mode": "REQUIRED",
+    "description": "Whether this is a coinbase transaction"
+  }
+]

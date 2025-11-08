@@ -18,7 +18,8 @@ from .routes import (
     chat,
     billing,
     email_preferences,
-    white_label
+    white_label,
+    monitoring
 )
 from .models.errors import ErrorResponse, ErrorDetail, ErrorCode
 from .middleware.response_headers import RateLimitHeadersMiddleware
@@ -143,6 +144,7 @@ app.include_router(chat.router)
 app.include_router(billing.router)
 app.include_router(email_preferences.router)
 app.include_router(white_label.router)
+app.include_router(monitoring.router)
 
 
 # Health check endpoint
