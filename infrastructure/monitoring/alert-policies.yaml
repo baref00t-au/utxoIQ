@@ -1,0 +1,224 @@
+# Cloud Monitoring Alert Policies for Database Monitoring
+
+# Alert for high query latency (>200ms)
+- displayName: "Database - High Query Latency"
+  documentation:
+    content: |
+      ## High Query Latency Alert
+      
+      Average database query latency has exceeded 200ms threshold.
+      
+      ### Impact
+      - Slow API response times
+      - Poor user experience
+      - Potential database performance issues
+      
+      ### Investigation Steps
+      1. Check Cloud SQL CPU and memory utilization
+      2. Review slow query log in Cloud SQL
+      3. Check connection pool metrics
+      4. Review recent database schema changes
+      5. Check for long-running queries
+      
+      ### Resolution
+      - Optimize slow queries with proper indexes
+      - Increase Cloud SQL instance size if needed
+      - Review and optimize connection pool settings
+      - Consider query result caching
+    mimeType: "text/markdown"
+  conditions:
+    - displayName: "Average query time > 200ms"
+      conditionThreshold:
+        filter: |
+          metric.type="custom.googleapis.com/database/average_query_time_ms"
+          resource.type="cloud_run_revision"
+        comparison: COMPARISON_GT
+        thresholdValue: 200
+        duration: 300s  # 5 minutes
+        aggregations:
+          - alignmentPeriod: 60s
+            perSeriesAligner: ALIGN_MEAN
+  combiner: OR
+  enabled: true
+  notificationChannels: []  # Add notification channel IDs here
+  alertStrategy:
+    autoClose: 1800s  # 30 minutes
+
+# Alert for high slow query percentage
+- displayName: "Database - High Slow Query Rate"
+  documentation:
+    content: |
+      ## High Slow Query Rate Alert
+      
+      More than 5% of queries are taking longer than 200ms to execute.
+      
+      ### Impact
+      - Degraded application performance
+      - Increased database load
+      - Poor user experience
+      
+      ### Investigation Steps
+      1. Check slow query log for patterns
+      2. Review Cloud SQL performance insights
+      3. Check for missing indexes
+      4. Review recent code deployments
+      5. Check for table locks or blocking queries
+      
+      ### Resolution
+      - Add indexes for frequently queried columns
+      - Optimize N+1 query patterns
+      - Implement query result caching
+      - Consider database read replicas for read-heavy workloads
+    mimeType: "text/markdown"
+  conditions:
+    - displayName: "Slow query percentage > 5%"
+      conditionThreshold:
+        filter: |
+          metric.type="custom.googleapis.com/database/slow_query_percentage"
+          resource.type="cloud_run_revision"
+        comparison: COMPARISON_GT
+        thresholdValue: 5.0
+        duration: 300s  # 5 minutes
+        aggregations:
+          - alignmentPeriod: 60s
+            perSeriesAligner: ALIGN_MEAN
+  combiner: OR
+  enabled: true
+  notificationChannels: []
+  alertStrategy:
+    autoClose: 1800s
+
+# Alert for connection pool exhaustion
+- displayName: "Database - Connection Pool Near Capacity"
+  documentation:
+    content: |
+      ## Connection Pool Near Capacity Alert
+      
+      Database connection pool is near maximum capacity (>90% utilization).
+      
+      ### Impact
+      - New requests may be blocked waiting for connections
+      - Increased request latency
+      - Potential request timeouts
+      
+      ### Investigation Steps
+      1. Check connection pool metrics (checked out vs total)
+      2. Review application logs for connection leaks
+      3. Check for long-running transactions
+      4. Review connection pool configuration
+      5. Check Cloud SQL connection limits
+      
+      ### Resolution
+      - Increase connection pool size if within Cloud SQL limits
+      - Fix connection leaks in application code
+      - Optimize transaction duration
+      - Consider horizontal scaling of application instances
+      - Review and close idle connections
+    mimeType: "text/markdown"
+  conditions:
+    - displayName: "Connection pool utilization > 90%"
+      conditionThreshold:
+        filter: |
+          metric.type="custom.googleapis.com/database/connection_pool_checked_out"
+          resource.type="cloud_run_revision"
+        comparison: COMPARISON_GT
+        thresholdValue: 18  # 90% of default pool size (20)
+        duration: 180s  # 3 minutes
+        aggregations:
+          - alignmentPeriod: 60s
+            perSeriesAligner: ALIGN_MEAN
+  combiner: OR
+  enabled: true
+  notificationChannels: []
+  alertStrategy:
+    autoClose: 900s  # 15 minutes
+
+# Alert for high Cloud SQL CPU
+- displayName: "Cloud SQL - High CPU Utilization"
+  documentation:
+    content: |
+      ## Cloud SQL High CPU Alert
+      
+      Cloud SQL instance CPU utilization has exceeded 80%.
+      
+      ### Impact
+      - Slow query execution
+      - Increased query latency
+      - Potential query timeouts
+      
+      ### Investigation Steps
+      1. Check Cloud SQL Performance Insights for expensive queries
+      2. Review slow query log
+      3. Check for missing indexes
+      4. Review recent traffic patterns
+      5. Check for inefficient queries or table scans
+      
+      ### Resolution
+      - Optimize expensive queries
+      - Add appropriate indexes
+      - Consider upgrading Cloud SQL instance size
+      - Implement query result caching
+      - Review and optimize connection pool settings
+    mimeType: "text/markdown"
+  conditions:
+    - displayName: "CPU utilization > 80%"
+      conditionThreshold:
+        filter: |
+          metric.type="cloudsql.googleapis.com/database/cpu/utilization"
+          resource.type="cloudsql_database"
+        comparison: COMPARISON_GT
+        thresholdValue: 0.8
+        duration: 300s  # 5 minutes
+        aggregations:
+          - alignmentPeriod: 60s
+            perSeriesAligner: ALIGN_MEAN
+  combiner: OR
+  enabled: true
+  notificationChannels: []
+  alertStrategy:
+    autoClose: 1800s
+
+# Alert for high Cloud SQL memory
+- displayName: "Cloud SQL - High Memory Utilization"
+  documentation:
+    content: |
+      ## Cloud SQL High Memory Alert
+      
+      Cloud SQL instance memory utilization has exceeded 80%.
+      
+      ### Impact
+      - Reduced query cache effectiveness
+      - Potential out-of-memory errors
+      - Degraded database performance
+      
+      ### Investigation Steps
+      1. Check Cloud SQL memory usage breakdown
+      2. Review connection count and pool settings
+      3. Check for memory leaks in stored procedures
+      4. Review buffer pool and cache settings
+      5. Check for large result sets or temporary tables
+      
+      ### Resolution
+      - Optimize queries to reduce memory usage
+      - Reduce connection pool size if excessive
+      - Consider upgrading Cloud SQL instance size
+      - Review and optimize database configuration
+      - Implement pagination for large result sets
+    mimeType: "text/markdown"
+  conditions:
+    - displayName: "Memory utilization > 80%"
+      conditionThreshold:
+        filter: |
+          metric.type="cloudsql.googleapis.com/database/memory/utilization"
+          resource.type="cloudsql_database"
+        comparison: COMPARISON_GT
+        thresholdValue: 0.8
+        duration: 300s  # 5 minutes
+        aggregations:
+          - alignmentPeriod: 60s
+            perSeriesAligner: ALIGN_MEAN
+  combiner: OR
+  enabled: true
+  notificationChannels: []
+  alertStrategy:
+    autoClose: 1800s

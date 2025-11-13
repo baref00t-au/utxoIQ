@@ -10,7 +10,7 @@ from ..models import (
     User,
     SignalType
 )
-from ..middleware import get_optional_user, rate_limit_dependency
+from ..middleware import get_optional_user, get_current_user, rate_limit_dependency
 from ..services.insights_service import InsightsService
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ async def get_latest_insights(
     page: int = Query(1, ge=1, description="Page number"),
     category: Optional[SignalType] = Query(None, description="Filter by signal type"),
     min_confidence: Optional[float] = Query(None, ge=0.0, le=1.0, description="Minimum confidence score"),
-    user: Optional[User] = Depends(get_optional_user),
+    user = Depends(get_optional_user),
     _: None = Depends(rate_limit_dependency)
 ):
     """
@@ -124,7 +124,7 @@ async def get_public_insights(
 )
 async def get_insight(
     insight_id: str,
-    user: Optional[User] = Depends(get_optional_user),
+    user = Depends(get_optional_user),
     _: None = Depends(rate_limit_dependency)
 ):
     """

@@ -1,26 +1,86 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { useWebSocket } from '@/lib/websocket';
+import { useDebounce } from '@/hooks/use-debounce';
+import { useListNavigation } from '@/hooks/use-insight-feed-shortcuts';
+import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { fetchInsights, fetchPublicInsights } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { InsightCard } from './insight-card';
 import { InsightFilters } from './insight-filters';
-import { Insight, SignalType } from '@/types';
+import { ExportButton } from './export-button';
+import { Insight, SignalType, FilterState } from '@/types';
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000';
 
 export function InsightFeed() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [insights, setInsights] = useState<Insight[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<SignalType | 'all'>('all');
-  const [highConfidenceOnly, setHighConfidenceOnly] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+
+  // Focus search input with "/" shortcut
+  const focusSearch = () => {
+    const searchInput = document.querySelector('[data-search-input]') as HTMLInputElement;
+    if (searchInput) {
+      searchInput.focus();
+      searchInput.select();
+    }
+  };
+
+  // Initialize filters from URL query params
+  const [filters, setFilters] = useState<FilterState>(() => {
+    const search = searchParams.get('search') || '';
+    const categories = searchParams.get('categories')?.split(',').filter(Boolean) as SignalType[] || [];
+    const minConfidence = parseFloat(searchParams.get('minConfidence') || '0');
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
+    
+    return {
+      search,
+      categories,
+      minConfidence,
+      dateRange: startDate && endDate ? {
+        start: new Date(startDate),
+        end: new Date(endDate),
+      } : null,
+    };
+  });
+
+  // Debounce filters for performance (300ms delay)
+  const debouncedFilters = useDebounce(filters, 300);
+
+  // Update URL query params when filters change
+  useEffect(() => {
+    const params = new URLSearchParams();
+    
+    if (debouncedFilters.search) {
+      params.set('search', debouncedFilters.search);
+    }
+    if (debouncedFilters.categories.length > 0) {
+      params.set('categories', debouncedFilters.categories.join(','));
+    }
+    if (debouncedFilters.minConfidence > 0) {
+      params.set('minConfidence', debouncedFilters.minConfidence.toString());
+    }
+    if (debouncedFilters.dateRange) {
+      params.set('startDate', debouncedFilters.dateRange.start.toISOString());
+      params.set('endDate', debouncedFilters.dateRange.end.toISOString());
+    }
+
+    const queryString = params.toString();
+    const newUrl = queryString ? `?${queryString}` : window.location.pathname;
+    
+    // Update URL without triggering a navigation
+    window.history.replaceState({}, '', newUrl);
+  }, [debouncedFilters]);
 
   // Fetch initial insights
   const { data: initialInsights, isLoading } = useQuery({
@@ -37,7 +97,7 @@ export function InsightFeed() {
 
   // Initialize insights from query
   useEffect(() => {
-    if (initialInsights) {
+    if (initialInsights && Array.isArray(initialInsights)) {
       setInsights(initialInsights);
     }
   }, [initialInsights]);
@@ -50,19 +110,83 @@ export function InsightFeed() {
     }
   }, [lastMessage]);
 
-  // Filter insights
-  const filteredInsights = insights.filter((insight) => {
-    if (selectedCategory !== 'all' && insight.signal_type !== selectedCategory) {
-      return false;
+  // Filter insights with memoization for performance
+  const filteredInsights = useMemo(() => {
+    if (!Array.isArray(insights)) return [];
+
+    const startTime = performance.now();
+    
+    const filtered = insights.filter((insight) => {
+      // Category filter (AND logic with multiple categories)
+      if (debouncedFilters.categories.length > 0 && 
+          !debouncedFilters.categories.includes(insight.signal_type)) {
+        return false;
+      }
+
+      // Confidence filter
+      if (insight.confidence < debouncedFilters.minConfidence) {
+        return false;
+      }
+
+      // Search filter (full-text search in headline and summary)
+      if (debouncedFilters.search) {
+        const searchLower = debouncedFilters.search.toLowerCase();
+        const matchesHeadline = insight.headline.toLowerCase().includes(searchLower);
+        const matchesSummary = insight.summary.toLowerCase().includes(searchLower);
+        if (!matchesHeadline && !matchesSummary) {
+          return false;
+        }
+      }
+
+      // Date range filter
+      if (debouncedFilters.dateRange) {
+        const insightDate = new Date(insight.timestamp);
+        if (insightDate < debouncedFilters.dateRange.start || 
+            insightDate > debouncedFilters.dateRange.end) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    const endTime = performance.now();
+    const filterTime = endTime - startTime;
+    
+    // Log warning if filtering takes longer than 500ms (requirement)
+    if (filterTime > 500) {
+      console.warn(`Filter application took ${filterTime.toFixed(2)}ms (exceeds 500ms requirement)`);
     }
-    if (highConfidenceOnly && insight.confidence < 0.7) {
-      return false;
-    }
-    if (searchQuery && !insight.headline.toLowerCase().includes(searchQuery.toLowerCase())) {
-      return false;
-    }
-    return true;
-  });
+
+    return filtered;
+  }, [insights, debouncedFilters]);
+
+  // Keyboard shortcuts for authenticated users
+  useKeyboardShortcuts(
+    user
+      ? [
+          {
+            key: '/',
+            action: focusSearch,
+            description: 'Focus search input',
+            category: 'Navigation',
+          },
+        ]
+      : [],
+    { enabled: !!user }
+  );
+
+  // Arrow key navigation for insight cards
+  useListNavigation(filteredInsights.length);
+
+  // Show loading spinner while auth is initializing
+  if (authLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-brand" />
+      </div>
+    );
+  }
 
   // Guest Mode: Show sign-up prompt if not authenticated
   if (!user) {
@@ -127,12 +251,9 @@ export function InsightFeed() {
       <aside className="hidden lg:block w-64 flex-shrink-0">
         <div className="sticky top-20">
           <InsightFilters
-            selectedCategory={selectedCategory}
-            onCategoryChange={setSelectedCategory}
-            highConfidenceOnly={highConfidenceOnly}
-            onHighConfidenceChange={setHighConfidenceOnly}
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
+            filters={filters}
+            onFiltersChange={setFilters}
+            resultCount={filteredInsights.length}
           />
         </div>
       </aside>
@@ -150,6 +271,18 @@ export function InsightFeed() {
             )}
           </div>
           <div className="flex gap-2">
+            <ExportButton
+              filters={{
+                signal_type: debouncedFilters.categories[0],
+                min_confidence: debouncedFilters.minConfidence,
+                date_range: debouncedFilters.dateRange ? {
+                  start: debouncedFilters.dateRange.start.toISOString(),
+                  end: debouncedFilters.dateRange.end.toISOString(),
+                } : undefined,
+              }}
+              limit={1000}
+              disabled={filteredInsights.length === 0}
+            />
             <Button
               variant="outline"
               size="sm"
@@ -165,12 +298,9 @@ export function InsightFeed() {
         {showFilters && (
           <div className="lg:hidden">
             <InsightFilters
-              selectedCategory={selectedCategory}
-              onCategoryChange={setSelectedCategory}
-              highConfidenceOnly={highConfidenceOnly}
-              onHighConfidenceChange={setHighConfidenceOnly}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
+              filters={filters}
+              onFiltersChange={setFilters}
+              resultCount={filteredInsights.length}
             />
           </div>
         )}

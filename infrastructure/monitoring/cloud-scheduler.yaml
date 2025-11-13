@@ -1,0 +1,24 @@
+# Cloud Scheduler job configuration for database metrics publishing
+
+# Job to publish database metrics every minute
+name: projects/utxoiq-project/locations/us-central1/jobs/database-metrics-publisher
+description: "Publish database connection pool and query metrics to Cloud Monitoring"
+schedule: "* * * * *"  # Every minute
+timeZone: "UTC"
+attemptDeadline: "30s"
+
+httpTarget:
+  uri: "https://utxoiq-api-xxxxx.run.app/api/v1/monitoring/database/publish-metrics"
+  httpMethod: POST
+  headers:
+    Content-Type: "application/json"
+  oidcToken:
+    serviceAccountEmail: "scheduler@utxoiq-project.iam.gserviceaccount.com"
+    audience: "https://utxoiq-api-xxxxx.run.app"
+
+retryConfig:
+  retryCount: 3
+  maxRetryDuration: "60s"
+  minBackoffDuration: "5s"
+  maxBackoffDuration: "30s"
+  maxDoublings: 3

@@ -1,0 +1,11 @@
+# Tor configuration for Bitcoin RPC over Tor
+SocksPort 9050
+ControlPort 9051
+Log notice stdout
+
+# Performance optimizations
+NumEntryGuards 8
+CircuitBuildTimeout 30
+
+# Disable unused features
+DisableDebuggerAttachment 0

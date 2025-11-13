@@ -1,0 +1,29 @@
+# Firebase credentials - NEVER commit these!
+firebase-credentials.json
+*firebase-credentials*.json
+
+# Environment files with secrets
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# GCP credentials
+*-key.json
+service-account*.json
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+temp/

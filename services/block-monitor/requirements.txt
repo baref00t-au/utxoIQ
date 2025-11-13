@@ -1,0 +1,15 @@
+# Block Monitor Service Dependencies
+
+# Bitcoin RPC
+python-bitcoinrpc==1.0
+
+# HTTP requests with SOCKS proxy support
+requests[socks]==2.31.0
+PySocks==1.7.1
+
+# Utilities
+python-dotenv==1.0.0
+
+# Web framework for health checks
+fastapi==0.104.1
+uvicorn[standard]==0.24.0

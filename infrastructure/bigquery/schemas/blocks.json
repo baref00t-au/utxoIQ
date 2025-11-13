@@ -1,0 +1,80 @@
+[
+  {
+    "name": "hash",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Block hash"
+  },
+  {
+    "name": "size",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Block size in bytes"
+  },
+  {
+    "name": "stripped_size",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Block size without witness data"
+  },
+  {
+    "name": "weight",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Block weight"
+  },
+  {
+    "name": "number",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "Block height"
+  },
+  {
+    "name": "version",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Block version"
+  },
+  {
+    "name": "merkle_root",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Merkle root hash"
+  },
+  {
+    "name": "timestamp",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "Block timestamp"
+  },
+  {
+    "name": "timestamp_month",
+    "type": "DATE",
+    "mode": "REQUIRED",
+    "description": "Month of the block timestamp"
+  },
+  {
+    "name": "nonce",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Block nonce"
+  },
+  {
+    "name": "bits",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Difficulty bits"
+  },
+  {
+    "name": "coinbase_param",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Coinbase parameter"
+  },
+  {
+    "name": "transaction_count",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Number of transactions in block"
+  }
+]

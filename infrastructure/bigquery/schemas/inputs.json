@@ -1,0 +1,86 @@
+[
+  {
+    "name": "transaction_hash",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Parent transaction hash"
+  },
+  {
+    "name": "block_hash",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Parent block hash"
+  },
+  {
+    "name": "block_number",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Parent block height"
+  },
+  {
+    "name": "block_timestamp",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE",
+    "description": "Block timestamp for partitioning"
+  },
+  {
+    "name": "index",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Input index"
+  },
+  {
+    "name": "spent_transaction_hash",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Hash of transaction being spent"
+  },
+  {
+    "name": "spent_output_index",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Index of output being spent"
+  },
+  {
+    "name": "script_asm",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Script assembly"
+  },
+  {
+    "name": "script_hex",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Script hex"
+  },
+  {
+    "name": "sequence",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Sequence number"
+  },
+  {
+    "name": "required_signatures",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Required signatures"
+  },
+  {
+    "name": "type",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Script type"
+  },
+  {
+    "name": "addresses",
+    "type": "STRING",
+    "mode": "REPEATED",
+    "description": "Input addresses"
+  },
+  {
+    "name": "value",
+    "type": "NUMERIC",
+    "mode": "NULLABLE",
+    "description": "Input value in satoshis"
+  }
+]

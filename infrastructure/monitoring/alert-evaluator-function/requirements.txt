@@ -1,0 +1,10 @@
+# Cloud Function requirements for alert evaluator
+functions-framework==3.*
+google-cloud-monitoring==2.15.1
+google-cloud-logging==3.5.0
+sqlalchemy[asyncio]==2.0.23
+asyncpg==0.29.0
+redis[hiredis]==5.0.1
+sendgrid==6.10.0
+httpx==0.25.2
+twilio==8.10.0

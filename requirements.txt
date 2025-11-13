@@ -1,0 +1,13 @@
+# BigQuery Hybrid Setup Requirements
+
+# Google Cloud
+google-cloud-bigquery==3.13.0
+google-cloud-pubsub==2.18.4
+google-cloud-logging==3.8.0
+
+# Bitcoin
+python-bitcoinrpc==1.0
+
+# Utilities
+python-dotenv==1.0.0
+requests==2.31.0

@@ -8,6 +8,7 @@ import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Share2, TrendingUp, TrendingDown } from 'lucide-react';
+import { BookmarkButton } from './bookmark-button';
 
 interface InsightCardProps {
   insight: Insight;
@@ -39,65 +40,73 @@ export function InsightCard({ insight, isGuest = false }: InsightCardProps) {
   const categoryColor = categoryColors[insight.signal_type];
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-6 transition-all hover:shadow-md hover:-translate-y-0.5">
+    <article 
+      className="rounded-2xl border border-border bg-card p-4 sm:p-6 transition-all hover:shadow-md hover:-translate-y-0.5 focus-within:outline-none focus-within:ring-2 focus-within:ring-brand focus-within:ring-offset-2"
+      data-insight-card
+      aria-labelledby={`insight-title-${insight.id}`}
+      aria-describedby={`insight-summary-${insight.id}`}
+    >
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2 flex-wrap">
           <div
-            className="w-3 h-3 rounded-full"
+            className="w-3 h-3 rounded-full flex-shrink-0"
             style={{ backgroundColor: categoryColor }}
+            role="img"
+            aria-label={`${categoryLabels[insight.signal_type]} category indicator`}
           />
           <span className="text-xs font-medium uppercase tracking-wide">
             {categoryLabels[insight.signal_type]}
           </span>
-          <span className="text-xs text-muted-foreground">
+          <time className="text-xs text-muted-foreground" dateTime={insight.timestamp}>
             {formatTime(insight.timestamp)}
-          </span>
+          </time>
           {insight.is_predictive && (
             <Badge variant="outline" className="text-xs">
-              <TrendingUp className="w-3 h-3 mr-1" />
+              <TrendingUp className="w-3 h-3 mr-1" aria-hidden="true" />
               Predictive
             </Badge>
           )}
         </div>
-        <Badge variant="outline" className={cn('text-xs', confidenceColor)}>
+        <Badge variant="outline" className={cn('text-xs w-fit', confidenceColor)} aria-label={`Confidence score: ${Math.round(insight.confidence * 100)} percent`}>
           {Math.round(insight.confidence * 100)}% confidence
         </Badge>
       </div>
 
       {/* Title */}
-      <h3 className="text-lg font-semibold mb-2 line-clamp-2">
+      <h3 id={`insight-title-${insight.id}`} className="text-lg font-semibold mb-2 line-clamp-2">
         {insight.headline}
       </h3>
 
       {/* Summary */}
-      <p className="text-sm text-muted-foreground mb-4 line-clamp-3">
+      <p id={`insight-summary-${insight.id}`} className="text-sm text-muted-foreground mb-4 line-clamp-3">
         {insight.summary}
       </p>
 
       {/* Chart */}
       {insight.chart_url && (
-        <div className="mb-4 rounded-lg overflow-hidden bg-background">
+        <figure className="mb-4 rounded-lg overflow-hidden bg-background">
           <Image
             src={insight.chart_url}
-            alt={`Chart for ${insight.headline}`}
+            alt={`Chart visualization for ${insight.headline}`}
             width={800}
             height={300}
             className="w-full h-auto"
           />
-        </div>
+        </figure>
       )}
 
       {/* Evidence */}
       {insight.evidence && insight.evidence.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-4">
+        <div className="flex flex-wrap gap-2 mb-4" role="list" aria-label="Blockchain evidence">
           {insight.evidence.slice(0, 3).map((evidence, idx) => (
-            <Badge key={idx} variant="secondary" className="text-xs font-mono">
+            <Badge key={idx} variant="secondary" className="text-xs font-mono" role="listitem">
+              <span className="sr-only">{evidence.type} identifier:</span>
               {evidence.type}: {evidence.id.slice(0, 8)}...
             </Badge>
           ))}
           {insight.evidence.length > 3 && (
-            <Badge variant="secondary" className="text-xs">
+            <Badge variant="secondary" className="text-xs" role="listitem">
               +{insight.evidence.length - 3} more
             </Badge>
           )}
@@ -106,7 +115,7 @@ export function InsightCard({ insight, isGuest = false }: InsightCardProps) {
 
       {/* Accuracy Rating */}
       {insight.accuracy_rating !== undefined && (
-        <div className="flex items-center gap-2 mb-4 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 mb-4 text-xs text-muted-foreground" role="status" aria-label={`Community accuracy rating: ${Math.round(insight.accuracy_rating * 100)} percent`}>
           <span>Community accuracy:</span>
           <span className="font-medium text-foreground">
             {Math.round(insight.accuracy_rating * 100)}%
@@ -117,27 +126,30 @@ export function InsightCard({ insight, isGuest = false }: InsightCardProps) {
 
       {/* Actions */}
       <div className="flex items-center justify-between pt-4 border-t border-border">
-        <Link href={`/insight/${insight.id}`}>
-          <Button variant="ghost" size="sm">
+        <Link href={`/insight/${insight.id}`} className="focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 rounded-lg">
+          <Button variant="ghost" size="sm" aria-label={`View full details for ${insight.headline}`}>
             View Details
           </Button>
         </Link>
-        <Button variant="ghost" size="sm">
-          <Share2 className="w-4 h-4" />
-        </Button>
+        <div className="flex items-center gap-1" role="group" aria-label="Insight actions">
+          {!isGuest && <BookmarkButton insightId={insight.id} />}
+          <Button variant="ghost" size="sm" aria-label={`Share ${insight.headline}`}>
+            <Share2 className="w-4 h-4" aria-hidden="true" />
+          </Button>
+        </div>
       </div>
 
       {/* Guest Mode CTA */}
       {isGuest && (
         <div className="mt-4 pt-4 border-t border-border">
           <p className="text-xs text-muted-foreground text-center">
-            <Link href="/sign-up" className="text-brand hover:underline">
+            <Link href="/sign-up" className="text-brand hover:underline focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 rounded">
               Sign up
             </Link>{' '}
             to see full details and set alerts
           </p>
         </div>
       )}
-    </div>
+    </article>
   );
 }

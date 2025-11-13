@@ -1,0 +1,53 @@
+# Cloud SQL Backup Configuration
+# This configuration defines automated backup settings for Cloud SQL PostgreSQL instance
+
+backup_configuration:
+  # Enable automated backups
+  enabled: true
+  
+  # Backup window - Daily at 01:00 UTC
+  start_time: "01:00"
+  
+  # Backup retention
+  backup_retention_settings:
+    retained_backups: 7  # Keep 7 daily backups
+    retention_unit: "COUNT"
+  
+  # Point-in-time recovery
+  point_in_time_recovery_enabled: true
+  
+  # Transaction log retention for PITR (7 days)
+  transaction_log_retention_days: 7
+  
+  # Binary log enabled for replication and PITR
+  binary_log_enabled: true
+  
+  # Backup location - separate region for disaster recovery
+  location: "us-central1"  # Primary region
+  backup_location: "us-east1"  # Backup region (different from primary)
+
+# High availability configuration
+high_availability:
+  enabled: true
+  availability_type: "REGIONAL"  # Regional instance with failover replica
+
+# Instance settings
+instance_settings:
+  tier: "db-custom-2-7680"  # 2 vCPU, 7.5 GB RAM
+  storage_type: "PD_SSD"
+  storage_size_gb: 100
+  storage_auto_resize: true
+  storage_auto_resize_limit: 500  # Max 500 GB
+
+# Maintenance window
+maintenance_window:
+  day: 7  # Sunday
+  hour: 2  # 02:00 UTC
+  update_track: "stable"
+
+# Backup verification settings
+backup_verification:
+  enabled: true
+  schedule: "0 3 * * 0"  # Weekly on Sunday at 03:00 UTC
+  test_instance_prefix: "backup-verify"
+  retention_hours: 2  # Delete test instance after 2 hours

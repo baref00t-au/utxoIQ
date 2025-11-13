@@ -7,9 +7,10 @@ from ..models import (
     AlertCreate,
     AlertUpdate,
     AlertResponse,
-    User
+    User,
+    UserSubscriptionTier
 )
-from ..middleware import verify_firebase_token, rate_limit_dependency
+from ..middleware import get_current_user, require_subscription_tier, rate_limit_dependency
 from ..services.alerts_service import AlertsService
 
 logger = logging.getLogger(__name__)
@@ -22,14 +23,18 @@ router = APIRouter(prefix="/alerts", tags=["alerts"])
     response_model=AlertResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create alert",
-    description="Create a new custom alert for blockchain metrics"
+    description="Create a new custom alert for blockchain metrics (Pro/Power tier required)"
 )
 async def create_alert(
     alert_data: AlertCreate,
-    user: User = Depends(verify_firebase_token),
+    user: User = Depends(require_subscription_tier(UserSubscriptionTier.PRO)),
     _: None = Depends(rate_limit_dependency)
 ):
-    """Create a new alert for the authenticated user."""
+    """
+    Create a new alert for the authenticated user.
+    
+    Requires Pro or Power subscription tier.
+    """
     try:
         service = AlertsService()
         alert = await service.create_alert(user.uid, alert_data)
@@ -49,7 +54,7 @@ async def create_alert(
     description="Retrieve all alerts for the authenticated user"
 )
 async def get_user_alerts(
-    user: User = Depends(verify_firebase_token),
+    user: User = Depends(get_current_user),
     _: None = Depends(rate_limit_dependency)
 ):
     """Get all alerts for the authenticated user."""
@@ -73,7 +78,7 @@ async def get_user_alerts(
 )
 async def get_alert(
     alert_id: str,
-    user: User = Depends(verify_firebase_token),
+    user: User = Depends(get_current_user),
     _: None = Depends(rate_limit_dependency)
 ):
     """Get a specific alert by ID."""
@@ -107,7 +112,7 @@ async def get_alert(
 async def update_alert(
     alert_id: str,
     alert_data: AlertUpdate,
-    user: User = Depends(verify_firebase_token),
+    user: User = Depends(get_current_user),
     _: None = Depends(rate_limit_dependency)
 ):
     """Update an existing alert."""
@@ -140,7 +145,7 @@ async def update_alert(
 )
 async def delete_alert(
     alert_id: str,
-    user: User = Depends(verify_firebase_token),
+    user: User = Depends(get_current_user),
     _: None = Depends(rate_limit_dependency)
 ):
     """Delete an existing alert."""

@@ -1,0 +1,52 @@
+# Cloud Scheduler configuration for data retention jobs
+# This file defines the scheduled job that runs daily at 02:00 UTC to execute retention policies
+
+# To deploy this scheduler job, run:
+# gcloud scheduler jobs create http retention-job \
+#   --location=us-central1 \
+#   --schedule="0 2 * * *" \
+#   --uri="https://utxoiq-api-<PROJECT_ID>.run.app/api/v1/monitoring/retention/run" \
+#   --http-method=POST \
+#   --oidc-service-account-email=cloud-scheduler@<PROJECT_ID>.iam.gserviceaccount.com \
+#   --oidc-token-audience="https://utxoiq-api-<PROJECT_ID>.run.app" \
+#   --time-zone="UTC" \
+#   --attempt-deadline=1800s \
+#   --max-retry-attempts=3 \
+#   --min-backoff-duration=60s \
+#   --max-backoff-duration=300s
+
+name: retention-job
+description: Daily data retention policy execution
+schedule: "0 2 * * *"  # Daily at 02:00 UTC
+time_zone: UTC
+attempt_deadline: 1800s  # 30 minutes timeout
+retry_config:
+  max_retry_attempts: 3
+  min_backoff_duration: 60s
+  max_backoff_duration: 300s
+  max_doublings: 5
+
+http_target:
+  uri: https://utxoiq-api-PROJECT_ID.run.app/api/v1/monitoring/retention/run
+  http_method: POST
+  headers:
+    Content-Type: application/json
+  oidc_token:
+    service_account_email: cloud-scheduler@PROJECT_ID.iam.gserviceaccount.com
+    audience: https://utxoiq-api-PROJECT_ID.run.app
+
+# Alerting configuration
+# Configure Cloud Monitoring alerts for job failures:
+# - Alert when job fails 2 consecutive times
+# - Send notifications to ops team via email/Slack
+# - Include job execution logs in alert
+
+# Required IAM permissions for service account:
+# - roles/run.invoker (to invoke Cloud Run service)
+# - roles/logging.logWriter (to write logs)
+
+# Monitoring metrics to track:
+# - scheduler/job/attempt_count
+# - scheduler/job/success_count
+# - scheduler/job/error_count
+# - scheduler/job/execution_time

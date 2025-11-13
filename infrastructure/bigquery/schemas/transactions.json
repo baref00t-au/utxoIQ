@@ -1,0 +1,92 @@
+[
+  {
+    "name": "hash",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Transaction hash"
+  },
+  {
+    "name": "size",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Transaction size in bytes"
+  },
+  {
+    "name": "virtual_size",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Virtual transaction size"
+  },
+  {
+    "name": "version",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Transaction version"
+  },
+  {
+    "name": "lock_time",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Lock time"
+  },
+  {
+    "name": "block_hash",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Parent block hash"
+  },
+  {
+    "name": "block_number",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "Parent block height"
+  },
+  {
+    "name": "block_timestamp",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "Block timestamp"
+  },
+  {
+    "name": "block_timestamp_month",
+    "type": "DATE",
+    "mode": "REQUIRED",
+    "description": "Month of the block timestamp"
+  },
+  {
+    "name": "is_coinbase",
+    "type": "BOOLEAN",
+    "mode": "NULLABLE",
+    "description": "Is coinbase transaction"
+  },
+  {
+    "name": "input_count",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Number of inputs"
+  },
+  {
+    "name": "output_count",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Number of outputs"
+  },
+  {
+    "name": "input_value",
+    "type": "NUMERIC",
+    "mode": "NULLABLE",
+    "description": "Total input value in satoshis"
+  },
+  {
+    "name": "output_value",
+    "type": "NUMERIC",
+    "mode": "NULLABLE",
+    "description": "Total output value in satoshis"
+  },
+  {
+    "name": "fee",
+    "type": "NUMERIC",
+    "mode": "NULLABLE",
+    "description": "Transaction fee in satoshis"
+  }
+]

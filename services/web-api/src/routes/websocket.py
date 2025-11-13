@@ -5,7 +5,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from typing import Optional
 from ..websocket import connection_manager
 from ..websocket.monitoring import monitoring_websocket_handler
-from ..middleware.auth import auth
+from ..middleware.auth import get_optional_user
 
 logger = logging.getLogger(__name__)
 

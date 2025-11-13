@@ -1,118 +1,108 @@
 """Rate limiting middleware using Redis."""
 import logging
 from typing import Optional
-from fastapi import HTTPException, Request, status
-import redis.asyncio as redis
+from fastapi import HTTPException, Request, status, Depends
+
 from ..config import settings
-from ..models.auth import User, UserSubscriptionTier
+from ..models.auth import UserSubscriptionTier
+from ..models.db_models import User
+from ..models.errors import RateLimitExceededError
+from ..services.rate_limiter_service import get_rate_limiter, RateLimiter
 
 logger = logging.getLogger(__name__)
-
-# Initialize Redis client
-redis_client: Optional[redis.Redis] = None
-
-
-async def get_redis_client() -> redis.Redis:
-    """Get or create Redis client."""
-    global redis_client
-    if redis_client is None:
-        redis_client = redis.Redis(
-            host=settings.redis_host,
-            port=settings.redis_port,
-            password=settings.redis_password if settings.redis_password else None,
-            decode_responses=True
-        )
-    return redis_client
-
-
-def get_rate_limit_for_tier(tier: UserSubscriptionTier) -> int:
-    """
-    Get rate limit for a subscription tier.
-    
-    Args:
-        tier: User subscription tier
-        
-    Returns:
-        Rate limit (requests per window)
-    """
-    limits = {
-        UserSubscriptionTier.FREE: settings.rate_limit_free_tier,
-        UserSubscriptionTier.PRO: settings.rate_limit_pro_tier,
-        UserSubscriptionTier.POWER: settings.rate_limit_power_tier,
-        UserSubscriptionTier.WHITE_LABEL: settings.rate_limit_power_tier * 10
-    }
-    return limits.get(tier, settings.rate_limit_free_tier)
 
 
 async def check_rate_limit(
     request: Request,
-    user: Optional[User] = None
+    user = None
 ) -> None:
     """
     Check if request is within rate limits.
+    
+    This function checks the rate limit for the current request based on
+    the user's subscription tier (if authenticated) or IP address (if not).
+    It stores rate limit information in the request state for use in
+    response headers.
+    
+    Args:
+        request: The incoming request
+        user: Optional authenticated user
+        rate_limiter: Rate limiter service instance
+        
+    Raises:
+        HTTPException: 429 if rate limit is exceeded
+    """
+    # Determine identifier and tier for rate limiting
+    if user:
+        identifier = str(user.id)
+        tier = UserSubscriptionTier(user.subscription_tier)
+    else:
+        # Use IP address for unauthenticated requests
+        client_ip = request.client.host if request.client else "unknown"
+        identifier = f"ip:{client_ip}"
+        tier = UserSubscriptionTier.FREE
+    
+    try:
+        # Get rate limiter instance
+        rate_limiter = await get_rate_limiter()
+        
+        # Check rate limit
+        allowed, remaining, reset_time = await rate_limiter.check_rate_limit(
+            user_id=identifier,
+            tier=tier
+        )
+        
+        # Store rate limit info in request state for response headers
+        limit = rate_limiter._get_limit_for_tier(tier)
+        request.state.rate_limit_limit = limit
+        request.state.rate_limit_remaining = remaining
+        request.state.rate_limit_reset = reset_time
+        
+        # Raise exception if limit exceeded
+        if not allowed:
+            logger.warning(
+                f"Rate limit exceeded: identifier={identifier}, tier={tier.value}, "
+                f"limit={limit}, reset_in={reset_time}s"
+            )
+            
+            raise RateLimitExceededError(
+                message=f"Rate limit exceeded. Try again in {reset_time} seconds.",
+                retry_after=reset_time,
+                limit=limit,
+                remaining=0
+            )
+        
+        logger.debug(
+            f"Rate limit check passed: identifier={identifier}, tier={tier.value}, "
+            f"remaining={remaining}/{limit}"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Rate limiting error: {e}", exc_info=True)
+        # Don't block requests if Redis is unavailable
+        # Set default values in request state
+        request.state.rate_limit_limit = settings.rate_limit_free_tier
+        request.state.rate_limit_remaining = settings.rate_limit_free_tier
+        request.state.rate_limit_reset = settings.rate_limit_window
+
+
+async def rate_limit_dependency(
+    request: Request,
+    user = None
+) -> None:
+    """
+    FastAPI dependency for rate limiting.
+    
+    This dependency can be added to any endpoint to enforce rate limiting.
+    It works with both authenticated and unauthenticated requests.
     
     Args:
         request: The incoming request
         user: Optional authenticated user
         
     Raises:
-        HTTPException: If rate limit is exceeded
-    """
-    # Determine identifier for rate limiting
-    if user:
-        identifier = f"user:{user.uid}"
-        limit = get_rate_limit_for_tier(user.subscription_tier)
-    else:
-        # Use IP address for unauthenticated requests
-        client_ip = request.client.host if request.client else "unknown"
-        identifier = f"ip:{client_ip}"
-        limit = settings.rate_limit_free_tier
-    
-    # Create Redis key
-    window = settings.rate_limit_window
-    redis_key = f"rate_limit:{identifier}:{window}"
-    
-    try:
-        client = await get_redis_client()
-        
-        # Increment counter
-        current = await client.incr(redis_key)
-        
-        # Set expiry on first request
-        if current == 1:
-            await client.expire(redis_key, window)
-        
-        # Check if limit exceeded
-        if current > limit:
-            ttl = await client.ttl(redis_key)
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Rate limit exceeded. Try again in {ttl} seconds.",
-                headers={"Retry-After": str(ttl)}
-            )
-        
-        # Store rate limit info in request state for response headers
-        request.state.rate_limit_remaining = limit - current
-        request.state.rate_limit_limit = limit
-        request.state.rate_limit_reset = ttl if current == 1 else await client.ttl(redis_key)
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Rate limiting error: {e}")
-        # Don't block requests if Redis is unavailable
-        pass
-
-
-async def rate_limit_dependency(
-    request: Request,
-    user: Optional[User] = None
-) -> None:
-    """
-    FastAPI dependency for rate limiting.
-    
-    Args:
-        request: The incoming request
-        user: Optional authenticated user
+        HTTPException: 429 if rate limit is exceeded
     """
     await check_rate_limit(request, user)

@@ -178,7 +178,7 @@ utxoiq_db/
 
 ### Local Development Setup
 
-1. **Prerequisites**: Docker, Node.js 18+, Python 3.9+, GCP CLI
+1. **Prerequisites**: Docker, Node.js 18+, Python 3.12+, GCP CLI
 2. **Environment**: Use `.env.local` files for configuration
 3. **Database**: Local PostgreSQL + BigQuery emulator for testing
 4. **Services**: Docker Compose for local service orchestration
@@ -188,8 +188,45 @@ utxoiq_db/
 - **Separation of Concerns**: Each service has a single responsibility
 - **Shared Types**: Common interfaces in `/shared/types/`
 - **Configuration**: Environment-based config management
-- **Testing**: Unit tests alongside source code
-- **Documentation**: API docs generated from code annotations
+- **Testing**: Tests organized by type in `/tests/` with standardized naming
+- **Documentation**: Organized in `/docs/` with clear structure
+
+### Test Organization
+
+Tests are organized by type in separate directories:
+
+```
+tests/
+├── unit/              # Unit tests (*.unit.test.py/ts)
+├── integration/       # Integration tests (*.integration.test.py/ts)
+├── e2e/              # End-to-end tests (*.e2e.test.py/ts)
+├── performance/      # Performance tests (*.performance.test.py/ts)
+└── security/         # Security tests (*.security.test.py/ts)
+```
+
+Service-specific tests follow the same naming conventions within each service's `tests/` directory.
+
+### Documentation Organization
+
+```
+docs/
+├── README.md                    # Documentation index
+├── implementation/              # Task implementation notes
+├── archive/                     # Historical/completed docs
+├── specs/                       # Detailed specifications
+└── *.md                        # Active documentation
+```
+
+### Scripts Organization
+
+```
+scripts/
+├── setup/           # Environment setup
+├── deployment/      # Deployment automation
+├── data/           # Data management
+├── testing/        # Testing and verification
+└── bigquery/       # BigQuery operations
+```
 
 ### Naming Conventions
 

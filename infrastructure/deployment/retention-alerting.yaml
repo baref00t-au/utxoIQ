@@ -1,0 +1,165 @@
+# Cloud Monitoring alerting configuration for retention jobs
+# This file defines alerts for monitoring retention job execution
+
+# Alert Policy 1: Retention Job Failures
+# Triggers when retention job fails 2 consecutive times
+---
+displayName: "Retention Job Failure Alert"
+documentation:
+  content: |
+    The data retention job has failed multiple times.
+    
+    This job is responsible for:
+    - Archiving old backfill jobs (>180 days)
+    - Archiving old feedback (>2 years)
+    - Archiving old metrics (>90 days)
+    - Deleting very old metrics (>1 year)
+    
+    **Troubleshooting Steps:**
+    1. Check Cloud Scheduler logs for error details
+    2. Verify Cloud Storage bucket permissions
+    3. Check database connectivity
+    4. Review retention service logs in Cloud Run
+    5. Manually trigger job to test: `gcloud scheduler jobs run retention-job --location us-central1`
+    
+    **Impact:**
+    - Old data may not be archived, increasing storage costs
+    - Database may grow beyond expected size
+    - Compliance requirements may not be met
+  mimeType: text/markdown
+
+conditions:
+  - displayName: "Retention job consecutive failures"
+    conditionThreshold:
+      filter: |
+        resource.type = "cloud_scheduler_job"
+        AND resource.labels.job_id = "retention-job"
+        AND metric.type = "scheduler.googleapis.com/job/error_count"
+      comparison: COMPARISON_GT
+      thresholdValue: 1
+      duration: 300s  # 5 minutes
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_RATE
+          crossSeriesReducer: REDUCE_SUM
+
+alertStrategy:
+  autoClose: 86400s  # Auto-close after 24 hours
+
+notificationChannels:
+  - projects/PROJECT_ID/notificationChannels/EMAIL_CHANNEL_ID
+  - projects/PROJECT_ID/notificationChannels/SLACK_CHANNEL_ID
+
+enabled: true
+
+---
+# Alert Policy 2: Retention Job Execution Time
+# Triggers when retention job takes longer than 25 minutes (timeout is 30 minutes)
+displayName: "Retention Job Long Execution Time"
+documentation:
+  content: |
+    The data retention job is taking longer than expected to complete.
+    
+    **Normal execution time:** 5-15 minutes
+    **Alert threshold:** 25 minutes
+    **Timeout:** 30 minutes
+    
+    **Possible causes:**
+    - Large volume of data to archive
+    - Slow Cloud Storage uploads
+    - Database performance issues
+    - Network connectivity problems
+    
+    **Actions:**
+    1. Check current job status in Cloud Scheduler
+    2. Review Cloud Run logs for performance bottlenecks
+    3. Monitor database query performance
+    4. Check Cloud Storage upload speeds
+    5. Consider increasing timeout if consistently slow
+  mimeType: text/markdown
+
+conditions:
+  - displayName: "Retention job execution time > 25 minutes"
+    conditionThreshold:
+      filter: |
+        resource.type = "cloud_scheduler_job"
+        AND resource.labels.job_id = "retention-job"
+        AND metric.type = "scheduler.googleapis.com/job/execution_time"
+      comparison: COMPARISON_GT
+      thresholdValue: 1500000  # 25 minutes in milliseconds
+      duration: 60s
+      aggregations:
+        - alignmentPeriod: 60s
+          perSeriesAligner: ALIGN_MAX
+
+alertStrategy:
+  autoClose: 3600s  # Auto-close after 1 hour
+
+notificationChannels:
+  - projects/PROJECT_ID/notificationChannels/EMAIL_CHANNEL_ID
+
+enabled: true
+
+---
+# Alert Policy 3: Retention Job Not Running
+# Triggers when retention job hasn't run successfully in 26 hours (should run daily)
+displayName: "Retention Job Not Running"
+documentation:
+  content: |
+    The data retention job has not run successfully in over 26 hours.
+    
+    **Expected schedule:** Daily at 02:00 UTC
+    **Alert threshold:** 26 hours without successful execution
+    
+    **Possible causes:**
+    - Cloud Scheduler job disabled
+    - Cloud Scheduler service issues
+    - Cloud Run service unavailable
+    - Authentication/authorization failures
+    
+    **Actions:**
+    1. Check if Cloud Scheduler job is enabled
+    2. Verify Cloud Run service is running
+    3. Check service account permissions
+    4. Review Cloud Scheduler logs for errors
+    5. Manually trigger job to test
+  mimeType: text/markdown
+
+conditions:
+  - displayName: "No successful retention job execution in 26 hours"
+    conditionAbsent:
+      filter: |
+        resource.type = "cloud_scheduler_job"
+        AND resource.labels.job_id = "retention-job"
+        AND metric.type = "scheduler.googleapis.com/job/success_count"
+      duration: 93600s  # 26 hours
+      aggregations:
+        - alignmentPeriod: 3600s
+          perSeriesAligner: ALIGN_RATE
+          crossSeriesReducer: REDUCE_SUM
+
+alertStrategy:
+  autoClose: 3600s
+
+notificationChannels:
+  - projects/PROJECT_ID/notificationChannels/EMAIL_CHANNEL_ID
+  - projects/PROJECT_ID/notificationChannels/SLACK_CHANNEL_ID
+
+enabled: true
+
+---
+# Deployment Instructions:
+# 
+# 1. Create notification channels first:
+#    - Email: gcloud alpha monitoring channels create --display-name="Ops Team Email" --type=email --channel-labels=email_address=ops@utxoiq.com
+#    - Slack: Configure via Cloud Console (requires Slack workspace integration)
+#
+# 2. Update PROJECT_ID, EMAIL_CHANNEL_ID, and SLACK_CHANNEL_ID in this file
+#
+# 3. Deploy alert policies:
+#    gcloud alpha monitoring policies create --policy-from-file=retention-alerting.yaml
+#
+# 4. Verify alerts:
+#    gcloud alpha monitoring policies list --filter="displayName:Retention"
+#
+# 5. Test alerts by manually failing the job or disabling it temporarily

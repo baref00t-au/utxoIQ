@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  tor:
+    image: dperson/torproxy
+    container_name: utxoiq-tor-proxy
+    ports:
+      - "9150:9050"  # SOCKS5 proxy (using 9150 to avoid conflict with BigQuery emulator)
+      - "9151:9051"  # Control port (optional)
+    restart: unless-stopped
+    environment:
+      - TOR_LOG_LEVEL=notice
+    networks:
+      - utxoiq-network
+
+networks:
+  utxoiq-network:
+    driver: bridge

@@ -4,6 +4,62 @@ from typing import Optional, Dict, Any
 from enum import Enum
 
 
+class AuthenticationError(Exception):
+    """Base exception raised for authentication failures."""
+    pass
+
+
+class TokenExpiredError(AuthenticationError):
+    """Exception raised when authentication token has expired."""
+    pass
+
+
+class InvalidTokenError(AuthenticationError):
+    """Exception raised when authentication token is invalid."""
+    pass
+
+
+class RevokedTokenError(AuthenticationError):
+    """Exception raised when authentication token has been revoked."""
+    pass
+
+
+class InvalidAPIKeyError(AuthenticationError):
+    """Exception raised when API key is invalid or revoked."""
+    pass
+
+
+class InsufficientPermissionsError(Exception):
+    """Exception raised when user lacks required permissions."""
+    pass
+
+
+class RateLimitExceededError(Exception):
+    """Exception raised when rate limit is exceeded."""
+    
+    def __init__(
+        self,
+        message: str = "Rate limit exceeded",
+        retry_after: int = 3600,
+        limit: int = 100,
+        remaining: int = 0
+    ):
+        """
+        Initialize rate limit exceeded error.
+        
+        Args:
+            message: Error message
+            retry_after: Seconds until rate limit resets
+            limit: Rate limit value
+            remaining: Remaining requests
+        """
+        self.message = message
+        self.retry_after = retry_after
+        self.limit = limit
+        self.remaining = remaining
+        super().__init__(self.message)
+
+
 class ErrorCode(str, Enum):
     """Error code enumeration."""
     DATA_UNAVAILABLE = "DATA_UNAVAILABLE"

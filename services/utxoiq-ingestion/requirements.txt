@@ -1,0 +1,23 @@
+# Feature Engine Service Dependencies
+
+# Web framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Google Cloud
+google-cloud-bigquery==3.13.0
+google-cloud-pubsub==2.18.4
+google-cloud-logging==3.8.0
+
+# Bitcoin
+python-bitcoinrpc==1.0
+
+# Utilities
+python-dotenv==1.0.0
+requests[socks]==2.31.0
+PySocks==1.7.1
+numpy==1.26.2
+scipy==1.11.4
+pandas==2.1.3

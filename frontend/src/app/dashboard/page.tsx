@@ -1,12 +1,9 @@
-import { Metadata } from 'next';
+'use client';
+
 import { SystemStatusDashboard } from '@/components/dashboard/system-status';
+import { CustomizableDashboard } from '@/components/dashboard/customizable-dashboard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { InsightFeed } from '@/components/insights/insight-feed';
-
-export const metadata: Metadata = {
-  title: 'Dashboard | utxoIQ',
-  description: 'Real-time Bitcoin blockchain intelligence dashboard',
-};
 
 export default function DashboardPage() {
   return (
@@ -22,12 +19,21 @@ export default function DashboardPage() {
         <Tabs defaultValue="insights" className="space-y-6">
           <TabsList>
             <TabsTrigger value="insights">Insights</TabsTrigger>
+            <TabsTrigger value="custom">Custom Dashboard</TabsTrigger>
             <TabsTrigger value="system">System Status</TabsTrigger>
             <TabsTrigger value="metrics">Metrics</TabsTrigger>
           </TabsList>
 
           <TabsContent value="insights" className="space-y-4">
             <InsightFeed />
+          </TabsContent>
+
+          <TabsContent value="custom" className="space-y-4">
+            <CustomizableDashboard
+              dashboardId="default-dashboard"
+              userId="current-user"
+              editable={true}
+            />
           </TabsContent>
 
           <TabsContent value="system" className="space-y-4">

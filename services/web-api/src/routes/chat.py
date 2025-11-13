@@ -2,7 +2,7 @@
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from ..models import ChatQuery, ChatResponse, User, UserSubscriptionTier
-from ..middleware import verify_firebase_token, require_subscription_tier, rate_limit_dependency
+from ..middleware import get_current_user, require_subscription_tier, rate_limit_dependency
 
 logger = logging.getLogger(__name__)
 
@@ -13,16 +13,17 @@ router = APIRouter(prefix="/chat", tags=["chat"])
     "/query",
     response_model=ChatResponse,
     summary="Submit chat query",
-    description="Ask natural language questions about Bitcoin blockchain data"
+    description="Ask natural language questions about Bitcoin blockchain data (Pro/Power tier required)"
 )
 async def submit_chat_query(
     query: ChatQuery,
-    user: User = Depends(verify_firebase_token),
+    user: User = Depends(require_subscription_tier(UserSubscriptionTier.PRO)),
     _: None = Depends(rate_limit_dependency)
 ):
     """
     Submit a natural language query about blockchain data.
     
+    Requires Pro or Power subscription tier.
     Power tier users get unlimited queries.
     """
     try:

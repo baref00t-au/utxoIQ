@@ -65,12 +65,22 @@ See [docs/WEBSOCKET_INFO.md](docs/WEBSOCKET_INFO.md) for details.
 
 ## 📚 Documentation
 
+### Getting Started
 - **[Integration Complete](INTEGRATION_COMPLETE.md)** - What was built
 - **[Setup Checklist](SETUP_CHECKLIST.md)** - Complete setup guide
 - **[Build Success](BUILD_SUCCESS.md)** - Build details
 - **[Quick Reference](docs/quick-reference.md)** - Commands and API reference
+
+### Authentication & Security
+- **[Authentication Guide](docs/authentication-guide.md)** - Complete authentication documentation
+- **[API Authentication Quick Reference](docs/api-authentication-quick-reference.md)** - Quick start guide
+- **[API Reference - Auth](docs/api-reference-auth.md)** - Authentication endpoints
+- **[Security Best Practices](docs/security-best-practices.md)** - Security guidelines
+
+### Integration
 - **[WebSocket Info](docs/WEBSOCKET_INFO.md)** - WebSocket connection guide
 - **[Integration Guide](docs/unified-platform-integration.md)** - Comprehensive guide
+- **[Integration Roadmap](docs/integration-roadmap.md)** - Development roadmap
 
 ## 🏗️ Architecture
 
@@ -136,9 +146,9 @@ npm run build
 ## 🎯 Status
 
 - ✅ Phase 1: Core Integration Complete
-- 🚧 Phase 2: Database & Persistence (Next)
-- 📅 Phase 3: Authentication
-- 📅 Phase 4: Advanced Monitoring
+- ✅ Phase 2: Database & Persistence Complete
+- ✅ Phase 3: Authentication & Authorization Complete
+- 📅 Phase 4: Advanced Monitoring (Next)
 
 See [docs/integration-roadmap.md](docs/integration-roadmap.md) for full roadmap.
 

@@ -51,11 +51,13 @@ interface SystemStatus {
   timestamp: string;
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+
 export function SystemStatusDashboard() {
   const { data: status, isLoading } = useQuery<SystemStatus>({
     queryKey: ['system-status'],
     queryFn: async () => {
-      const res = await fetch('/api/v1/monitoring/status');
+      const res = await fetch(`${API_URL}/api/v1/monitoring/status`);
       if (!res.ok) throw new Error('Failed to fetch status');
       return res.json();
     },

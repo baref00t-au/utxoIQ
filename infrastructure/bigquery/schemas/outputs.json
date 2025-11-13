@@ -1,0 +1,68 @@
+[
+  {
+    "name": "transaction_hash",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Parent transaction hash"
+  },
+  {
+    "name": "block_hash",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Parent block hash"
+  },
+  {
+    "name": "block_number",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Parent block height"
+  },
+  {
+    "name": "block_timestamp",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE",
+    "description": "Block timestamp for partitioning"
+  },
+  {
+    "name": "index",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Output index"
+  },
+  {
+    "name": "script_asm",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Script assembly"
+  },
+  {
+    "name": "script_hex",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Script hex"
+  },
+  {
+    "name": "required_signatures",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Required signatures"
+  },
+  {
+    "name": "type",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Script type"
+  },
+  {
+    "name": "addresses",
+    "type": "STRING",
+    "mode": "REPEATED",
+    "description": "Output addresses"
+  },
+  {
+    "name": "value",
+    "type": "NUMERIC",
+    "mode": "NULLABLE",
+    "description": "Output value in satoshis"
+  }
+]

@@ -59,6 +59,8 @@ docker-compose.override.yml
 # GCP credentials
 *-key.json
 service-account*.json
+firebase-credentials.json
+*firebase-credentials*.json
 
 # Temporary files
 temp/

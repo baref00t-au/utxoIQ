@@ -14,12 +14,23 @@ passlib[bcrypt]==1.7.4
 
 # Database and caching
 google-cloud-bigquery==3.17.0
-google-cloud-sql-connector==1.7.0
+google-cloud-monitoring==2.18.0
+google-cloud-logging==3.9.0
+google-cloud-storage==2.14.0
+google-cloud-error-reporting==1.12.0
 psycopg2-binary==2.9.9
+sqlalchemy[asyncio]==2.0.25
+asyncpg==0.29.0
+cloud-sql-python-connector[asyncpg]==1.7.0
+alembic==1.13.1
 redis==5.0.1
 
 # Stripe for billing
 stripe==8.0.0
+
+# Notifications
+sendgrid==6.11.0
+twilio==8.11.1
 
 # Vertex AI for chat
 google-cloud-aiplatform==1.42.1
@@ -27,12 +38,24 @@ google-cloud-aiplatform==1.42.1
 # Data validation
 pydantic==2.5.3
 pydantic-settings==2.1.0
+email-validator==2.1.0
 
 # HTTP client
 httpx==0.26.0
 
 # Utilities
 python-dotenv==1.0.0
+numpy==1.26.3
+
+# Distributed Tracing
+opentelemetry-api==1.22.0
+opentelemetry-sdk==1.22.0
+opentelemetry-exporter-gcp-trace==1.6.0
+opentelemetry-instrumentation-fastapi==0.43b0
+google-cloud-trace==1.11.3
+
+# Performance Profiling
+py-spy==0.3.14
 
 # Testing
 pytest==7.4.3

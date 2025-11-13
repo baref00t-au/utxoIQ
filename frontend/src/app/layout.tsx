@@ -4,8 +4,15 @@ import './globals.css';
 import { Providers } from '@/components/providers';
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
+import { SkipToMain } from '@/components/layout/skip-to-main';
+import { Toaster } from 'sonner';
+import { PerformanceMonitor } from '@/components/performance-monitor';
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ 
+  subsets: ['latin'],
+  display: 'swap', // Optimize font loading
+  preload: true,
+});
 
 export const metadata: Metadata = {
   title: 'utxoIQ - AI-Powered Bitcoin Intelligence',
@@ -31,14 +38,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
+        <SkipToMain />
         <Providers>
           <div className="flex min-h-screen flex-col">
             <Header />
-            <main className="flex-1">{children}</main>
+            <main className="flex-1" id="main-content" role="main" aria-label="Main content">
+              {children}
+            </main>
             <Footer />
           </div>
+          <Toaster position="top-right" />
+          <PerformanceMonitor />
         </Providers>
       </body>
     </html>
