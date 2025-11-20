@@ -7,5 +7,11 @@ google-cloud-aiplatform==1.42.1
 # HTTP Client
 httpx==0.26.0
 
+# AI Providers (optional - install based on AI_PROVIDER choice)
+# Vertex AI is included above via google-cloud-aiplatform
+# For OpenAI: pip install openai>=1.0.0
+# For Anthropic: pip install anthropic>=0.18.0
+# For Grok: uses httpx (already included)
+
 # Utilities
 python-dotenv==1.0.0

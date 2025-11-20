@@ -128,230 +128,366 @@
     - Include metadata: entity_name, company_ticker, flow_type, amount_btc, known_holdings_btc, holdings_change_pct
     - _Requirements: 9.3, 9.6_
 
-- [ ] 6. Implement Predictive Analytics Module
-  - [ ] 6.1 Create PredictiveAnalyticsModule class
+- [x] 6. Implement Predictive Analytics Module
+
+
+
+
+  - [x] 6.1 Create PredictiveAnalyticsModule class
+
+
     - Implement generate_fee_forecast() using exponential smoothing
     - Implement generate_liquidity_pressure() using z-score normalization
     - Filter predictions with confidence <0.5
     - _Requirements: 10.1, 10.2, 10.6_
   
-  - [ ] 6.2 Add predictive signal metadata
+  - [x] 6.2 Add predictive signal metadata
+
+
     - Include prediction_type, predicted_value, confidence_interval, forecast_horizon, model_version
     - Set signal_type to "predictive" with prediction_type field
     - _Requirements: 10.3, 10.4_
 
-- [ ] 7. Implement Pipeline Orchestrator
-  - [ ] 7.1 Create PipelineOrchestrator class
+
+- [x] 7. Implement Pipeline Orchestrator
+
+
+
+
+  - [x] 7.1 Create PipelineOrchestrator class
+
     - Implement process_new_block() method with correlation ID generation
     - Implement _generate_signals() method to run all enabled processors in parallel
     - Add timing metrics for each stage (signal generation, persistence)
     - _Requirements: 5.1, 5.3_
   
-  - [ ] 7.2 Add error handling and monitoring
+
+  - [x] 7.2 Add error handling and monitoring
+
     - Log processor failures without blocking other processors
     - Emit success metrics to Cloud Monitoring with total execution time
     - Handle failures gracefully and continue processing subsequent blocks
     - _Requirements: 5.4, 6.1_
 
-- [ ] 8. Implement Configuration Module
-  - [ ] 8.1 Create ConfigurationModule class
+- [x] 8. Implement Configuration Module
+
+
+
+
+
+  - [x] 8.1 Create ConfigurationModule class
+
     - Load processor settings from environment variables (enabled flags, thresholds, time windows)
     - Implement should_reload() check for 5-minute interval
     - Implement reload_config() method for hot-reload
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
 
-- [ ] 9. Integrate signal generation into utxoiq-ingestion service
-  - [ ] 9.1 Wire Pipeline Orchestrator into block monitor
+- [x] 9. Integrate signal generation into utxoiq-ingestion service
+
+
+
+
+
+  - [x] 9.1 Wire Pipeline Orchestrator into block monitor
+
+
     - Trigger signal generation within 5 seconds of block detection
     - Pass block data to orchestrator
     - _Requirements: 5.1_
   
-  - [ ] 9.2 Add signal persistence after generation
+  - [x] 9.2 Add signal persistence after generation
+
+
     - Call SignalPersistenceModule with generated signals
     - Log correlation IDs for tracing
     - _Requirements: 1.5, 5.3_
 
-- [ ] 10. Implement AI Provider Module
-  - [ ] 10.1 Create AIProvider abstract base class
+- [x] 10. Implement AI Provider Module
+
+
+
+
+
+  - [x] 10.1 Create AIProvider abstract base class
+
+
     - Define generate_insight() abstract method
     - _Requirements: 8.1, 8.6_
   
-  - [ ] 10.2 Implement VertexAIProvider
+  - [x] 10.2 Implement VertexAIProvider
+
     - Initialize Vertex AI client with Gemini Pro model
     - Format prompts and parse JSON responses
     - _Requirements: 8.2_
   
-  - [ ] 10.3 Implement OpenAIProvider
+  - [x] 10.3 Implement OpenAIProvider
+
     - Initialize OpenAI client with configured GPT model
     - Format prompts and parse JSON responses
     - _Requirements: 8.3_
   
-  - [ ] 10.4 Implement AnthropicProvider
+  - [x] 10.4 Implement AnthropicProvider
+
     - Initialize Anthropic client with configured Claude model
     - Format prompts and parse JSON responses
     - _Requirements: 8.4_
   
-  - [ ] 10.5 Implement GrokProvider
+  - [x] 10.5 Implement GrokProvider
+
     - Initialize xAI client with configured Grok model
     - Format prompts and parse JSON responses
     - _Requirements: 8.5_
   
-  - [ ] 10.6 Add provider configuration loading
+  - [x] 10.6 Add provider configuration loading
+
     - Load AI_PROVIDER, API keys, and model names from environment variables
     - Implement provider factory to instantiate correct provider
     - _Requirements: 8.1_
   
-  - [ ] 10.7 Add error handling for AI provider failures
+  - [x] 10.7 Add error handling for AI provider failures
+
     - Log errors with signal_id context
     - Return error status without switching providers
     - _Requirements: 8.7_
 
-- [ ] 11. Create AI prompt templates
-  - [ ] 11.1 Create mempool_prompt.py with MEMPOOL_TEMPLATE
+- [x] 11. Create AI prompt templates
+
+
+
+
+
+  - [x] 11.1 Create mempool_prompt.py with MEMPOOL_TEMPLATE
+
+
     - Include fields: fee_rate_median, fee_rate_change_pct, mempool_size_mb, tx_count
     - Request JSON output: headline, summary, confidence_explanation
     - _Requirements: 3.3_
   
-  - [ ] 11.2 Create exchange_prompt.py with EXCHANGE_TEMPLATE
+  - [x] 11.2 Create exchange_prompt.py with EXCHANGE_TEMPLATE
+
+
     - Include fields: entity_name, flow_type, amount_btc, tx_count, block_height
     - Request JSON output with exchange name in headline
     - _Requirements: 3.3_
   
-  - [ ] 11.3 Create miner_prompt.py with MINER_TEMPLATE
+  - [x] 11.3 Create miner_prompt.py with MINER_TEMPLATE
+
+
     - Include fields: pool_name, amount_btc, treasury_balance_change
     - Request JSON output emphasizing mining pool activity
     - _Requirements: 3.3_
   
-  - [ ] 11.4 Create whale_prompt.py with WHALE_TEMPLATE
+  - [x] 11.4 Create whale_prompt.py with WHALE_TEMPLATE
+
+
     - Include fields: whale_address, amount_btc, balance_btc
     - Request JSON output emphasizing large holder movements
     - _Requirements: 3.3_
   
-  - [ ] 11.5 Create treasury_prompt.py with TREASURY_TEMPLATE
+  - [x] 11.5 Create treasury_prompt.py with TREASURY_TEMPLATE
+
+
     - Include fields: entity_name, company_ticker, flow_type, amount_btc, known_holdings_btc, holdings_change_pct
     - Request JSON output mentioning company name and ticker
     - _Requirements: 3.3_
   
-  - [ ] 11.6 Create predictive_prompt.py with PREDICTIVE_TEMPLATE
+  - [x] 11.6 Create predictive_prompt.py with PREDICTIVE_TEMPLATE
+
+
     - Include fields: prediction_type, predicted_value, confidence_interval, forecast_horizon, current_value
     - Request JSON output emphasizing forward-looking nature
     - _Requirements: 10.5_
 
-- [ ] 12. Implement Signal Polling Module
-  - [ ] 12.1 Create SignalPollingModule class
+- [x] 12. Implement Signal Polling Module
+
+
+
+
+
+  - [x] 12.1 Create SignalPollingModule class
+
+
     - Implement poll_unprocessed_signals() method to query BigQuery for processed=false and confidence>=0.7
     - Group signals by signal_type and block_height for batch processing
     - _Requirements: 3.1, 3.2_
   
-  - [ ] 12.2 Implement signal marking logic
+  - [x] 12.2 Implement signal marking logic
+
     - Implement mark_signal_processed() method to update processed=true and processed_at timestamp
     - _Requirements: 3.5_
 
 - [ ] 13. Implement Insight Generation Module
-  - [ ] 13.1 Create InsightGenerationModule class
+
+
+
+
+  - [x] 13.1 Create InsightGenerationModule class
+
     - Implement generate_insight() method to select prompt template based on signal_type
     - Invoke AI provider with formatted prompt
     - Parse AI response and validate JSON structure
     - _Requirements: 3.3, 3.4_
   
-  - [ ] 13.2 Implement evidence extraction
+  - [x] 13.2 Implement evidence extraction
+
     - Implement _extract_evidence() method to extract block_heights and transaction_ids from signal metadata
     - _Requirements: 4.2_
 
-- [ ] 14. Implement Insight Persistence Module
-  - [ ] 14.1 Create InsightPersistenceModule class
+- [x] 14. Implement Insight Persistence Module
+
+
+
+
+  - [x] 14.1 Create InsightPersistenceModule class
+
+
     - Implement persist_insight() method to write to intel.insights table
     - Set chart_url to null initially
     - Return insight_id on success
     - _Requirements: 4.1, 4.3, 4.5_
   
-  - [ ] 14.2 Add error handling for persistence failures
+  - [x] 14.2 Add error handling for persistence failures
+
+
     - Log errors with signal_id context
     - Mark signal as unprocessed for retry
     - _Requirements: 4.4_
 
-- [ ] 15. Create insight-generator service main application
-  - [ ] 15.1 Set up FastAPI application structure
+- [x] 15. Create insight-generator service main application
+
+
+
+
+  - [x] 15.1 Set up FastAPI application structure
+
+
     - Create main.py with FastAPI app initialization
     - Add health check endpoint
     - _Requirements: 3.1_
   
-  - [ ] 15.2 Implement polling loop
+  - [x] 15.2 Implement polling loop
+
     - Create background task to poll for unprocessed signals every 10 seconds
     - Trigger insight generation for each signal group
     - Mark signals as processed after successful insight creation
     - _Requirements: 3.1, 3.2, 3.5_
   
-  - [ ] 15.3 Wire together all insight generation components
+  - [x] 15.3 Wire together all insight generation components
+
     - Initialize SignalPollingModule, InsightGenerationModule, InsightPersistenceModule
     - Connect AI provider based on configuration
     - Add correlation ID logging throughout
     - _Requirements: 5.2_
 
-- [ ] 16. Implement Error Handler
-  - [ ] 16.1 Create ErrorHandler class
+- [x] 16. Implement Error Handler
+
+
+
+
+  - [x] 16.1 Create ErrorHandler class
+
     - Implement handle_processor_error() method with context logging
     - Implement retry_with_backoff() method with exponential backoff (max 3 attempts)
     - _Requirements: 6.1, 6.2_
   
-  - [ ] 16.2 Add alerting for stale signals
+  - [x] 16.2 Add alerting for stale signals
+
     - Emit alert to Cloud Monitoring if signals remain unprocessed >1 hour
     - _Requirements: 6.4_
   
-  - [ ] 16.3 Add correlation ID logging
+  - [x] 16.3 Add correlation ID logging
+
     - Include correlation_id in all error log messages
     - _Requirements: 6.5_
+-
 
 - [ ] 17. Implement Monitoring Module
-  - [ ] 17.1 Create MonitoringModule class
+
+
+
+  - [x] 17.1 Create MonitoringModule class
+
+
     - Implement emit_pipeline_metrics() for timing metrics (signal_generation_duration_ms, total_pipeline_duration_ms)
     - Implement emit_signal_metrics() for signal counts by type and confidence bucket
     - Implement emit_insight_metrics() for insight counts by category and confidence bucket
     - _Requirements: 12.1, 12.2, 12.3_
   
-  - [ ] 17.2 Add entity and error metrics
+  - [x] 17.2 Add entity and error metrics
+
     - Implement emit_entity_metrics() for entity identification counts by entity_name
     - Implement emit_error_metrics() for error counts by error_type, service_name
     - _Requirements: 12.4, 12.5_
   
-  - [ ] 17.3 Add AI provider and backfill metrics
+  - [x] 17.3 Add AI provider and backfill metrics
+
     - Implement emit_ai_provider_metrics() for latency by provider
     - Add counters for total_blocks_processed and total_insights_generated
     - _Requirements: 12.6, 12.7, 12.8_
 
-- [ ] 18. Implement Historical Backfill Module
-  - [ ] 18.1 Create HistoricalBackfillModule class
+
+
+- [x] 18. Implement Historical Backfill Module
+
+
+
+
+
+
+  - [x] 18.1 Create HistoricalBackfillModule class
+
+
     - Implement backfill_date_range() method to query btc.blocks for historical blocks
     - Process blocks in chronological order
     - _Requirements: 11.1, 11.4_
   
-  - [ ] 18.2 Add historical context processing
+  - [x] 18.2 Add historical context processing
+
+
     - Implement _get_historical_context() method to query surrounding blocks
     - Write signals with original block timestamps
     - Mark signals as processed=false for insight generation
     - _Requirements: 11.2, 11.3, 11.5_
   
-  - [ ] 18.3 Add rate limiting and selective backfill
+  - [x] 18.3 Add rate limiting and selective backfill
+
+
     - Implement rate limiting (max 100 blocks per minute)
     - Support selective backfill by signal_types parameter
     - _Requirements: 11.6, 11.7_
 
-- [ ] 19. Populate known entities database
-  - [ ] 19.1 Create script to populate btc.known_entities table
+-
+
+- [x] 19. Populate known entities database
+
+
+
+
+
+
+
+  - [x] 19.1 Create script to populate btc.known_entities table
+
     - Add exchange entities (Coinbase, Kraken, Binance, Gemini, Bitstamp) with known addresses
     - Add mining pool entities (Foundry USA, AntPool, F2Pool, ViaBTC, Binance Pool) with known addresses
     - Add treasury company entities (MicroStrategy/MSTR, Tesla/TSLA, Block/SQ, Marathon/MARA, Riot/RIOT) with known addresses and holdings metadata
+
     - _Requirements: 9.1, 9.2_
 
-- [ ] 20. Add environment variable configuration
-  - [ ] 20.1 Document all required environment variables
+- [x] 20. Add environment variable configuration
+
+
+
+  - [x] 20.1 Document all required environment variables
+
     - Signal processor toggles (MEMPOOL_PROCESSOR_ENABLED, EXCHANGE_PROCESSOR_ENABLED, etc.)
     - Thresholds (CONFIDENCE_THRESHOLD, WHALE_THRESHOLD_BTC)
     - Time windows (MEMPOOL_TIME_WINDOW, EXCHANGE_TIME_WINDOW, MINER_TIME_WINDOW)
     - AI provider settings (AI_PROVIDER, API keys, model names)
     - _Requirements: 7.1, 8.1_
   
-  - [ ] 20.2 Create .env.example files for both services
+  - [x] 20.2 Create .env.example files for both services
+
     - Create services/utxoiq-ingestion/.env.example
     - Create services/insight-generator/.env.example
     - _Requirements: 7.1, 8.1_

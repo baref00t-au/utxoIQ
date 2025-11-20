@@ -12,12 +12,17 @@ This unified service implements:
 - **Real-time Processing**: Ingests blocks within 60 seconds of detection
 - **BigQuery Storage**: Stores blocks and transactions in structured format
 
-### Signal Processing
+### Signal Processing Pipeline
 - **Mempool Signal Processing**: Fee quantile calculation and block inclusion time estimation
 - **Exchange Flow Detection**: Entity-tagged transaction analysis with anomaly detection
 - **Miner Treasury Tracking**: Daily balance change calculation and treasury delta computation
 - **Whale Accumulation Detection**: Rolling 7-day accumulation pattern analysis
-- **Predictive Analytics**: Fee forecasting and liquidity pressure index computation
+- **Treasury Company Tracking**: Public company Bitcoin holdings monitoring
+- **Predictive Analytics** ✨: 
+  - Fee forecasting using exponential smoothing
+  - Liquidity pressure analysis using z-score normalization
+  - Confidence-based filtering (≥0.5 threshold)
+  - Forward-looking insights with confidence intervals
 
 ## Architecture
 
@@ -27,25 +32,47 @@ The service is built with:
 - **NumPy/SciPy**: Statistical analysis and signal processing
 - **Google Cloud**: BigQuery and Pub/Sub integration (planned)
 
+## API Endpoints
+
+### Signal Processing
+- `POST /process/signals` - Process block through signal generation pipeline
+  - Runs all 6 processors in parallel (including predictive analytics)
+  - Returns generated signals with timing metrics
+  - Supports historical data for predictive models
+
+### Block Ingestion
+- `POST /ingest/block` - Ingest Bitcoin block into BigQuery
+- `POST /cleanup` - Clean up data older than specified hours
+
+### Status & Monitoring
+- `GET /health` - Health check endpoint
+- `GET /status` - Service status with processor information
+
 ## Project Structure
 
 ```
-feature-engine/
+utxoiq-ingestion/
 ├── src/
 │   ├── processors/
+│   │   ├── base_processor.py         # Base processor interface
 │   │   ├── mempool_processor.py      # Mempool signal processing
 │   │   ├── exchange_processor.py     # Exchange flow detection
 │   │   ├── miner_processor.py        # Miner treasury tracking
 │   │   ├── whale_processor.py        # Whale accumulation detection
-│   │   └── predictive_analytics.py   # Predictive models
+│   │   ├── treasury_processor.py     # Public company tracking
+│   │   └── predictive_analytics.py   # Predictive models ✨
+│   ├── pipeline_orchestrator.py      # Pipeline coordination
+│   ├── signal_persistence.py         # BigQuery persistence
+│   ├── monitoring.py                 # Cloud Monitoring integration
+│   ├── error_handler.py              # Error handling & retry
 │   ├── config.py                     # Configuration management
 │   ├── models.py                     # Pydantic data models
-│   ├── signal_processor.py           # Main signal coordinator
 │   └── main.py                       # FastAPI application
 ├── tests/
-│   ├── test_mempool_processor.py
-│   ├── test_exchange_processor.py
-│   └── test_predictive_analytics.py
+│   ├── mempool-processor.unit.test.py
+│   ├── exchange-processor.unit.test.py
+│   ├── predictive-analytics.unit.test.py
+│   └── signal-persistence.integration.test.py
 ├── requirements.txt
 ├── Dockerfile
 └── README.md

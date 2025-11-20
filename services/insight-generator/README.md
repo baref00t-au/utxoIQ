@@ -1,10 +1,10 @@
 # Insight Generator Service
 
-AI-powered Bitcoin blockchain insight generation service with explainability and feedback loop.
+AI-powered Bitcoin blockchain insight generation service with multi-provider support, explainability, and feedback loop.
 
 ## Overview
 
-The Insight Generator service transforms raw blockchain signals into human-readable insights using Vertex AI (Gemini Pro). It includes:
+The Insight Generator service transforms raw blockchain signals into human-readable insights using multiple AI providers (Vertex AI, OpenAI, Anthropic, xAI Grok). It includes:
 
 - **Prompt Templates**: Context-aware prompts for each signal type (mempool, exchange, miner, whale, predictive)
 - **Confidence Scoring**: Multi-factor confidence calculation with 0.7 publication threshold
@@ -14,7 +14,39 @@ The Insight Generator service transforms raw blockchain signals into human-reada
 
 ## Features
 
-### Insight Generation
+### AI Provider Module
+- **Multi-Provider Support**: Switch between Vertex AI, OpenAI, Anthropic, and xAI Grok
+- **Unified Interface**: Abstract base class for consistent behavior across providers
+- **Environment Configuration**: Change providers without code changes
+- **Factory Pattern**: Easy provider instantiation and management
+- **Comprehensive Error Handling**: Graceful failures with detailed logging
+- **See**: [AI_PROVIDER_GUIDE.md](./AI_PROVIDER_GUIDE.md) for complete documentation
+
+### Signal Polling Module
+- **BigQuery Integration**: Polls intel.signals for unprocessed signals
+- **Confidence Filtering**: Only processes signals with confidence ≥ 0.7
+- **Signal Grouping**: Groups signals by type and block height for batch processing
+- **State Management**: Marks signals as processed after insight generation
+- **Stale Signal Detection**: Identifies signals stuck in queue for alerting
+- **See**: [SIGNAL_POLLING_MODULE.md](./SIGNAL_POLLING_MODULE.md) for complete documentation
+
+### Insight Generation Module
+- **Template Selection**: Chooses appropriate prompt based on signal type
+- **AI Integration**: Invokes configured AI provider with formatted prompts
+- **Response Validation**: Parses and validates AI-generated content
+- **Evidence Extraction**: Extracts blockchain citations from signal metadata
+- **Batch Processing**: Generates multiple insights efficiently
+- **See**: [INSIGHT_GENERATION_MODULE.md](./INSIGHT_GENERATION_MODULE.md) for complete documentation
+
+### Insight Persistence Module (NEW)
+- **BigQuery Storage**: Writes insights to intel.insights table
+- **Error Handling**: Automatic retry mechanism for failed operations
+- **Batch Operations**: Efficient multi-insight persistence
+- **Query Utilities**: Verification and debugging tools
+- **Chart URL Management**: Sets chart_url to null for later population
+- **See**: [INSIGHT_PERSISTENCE_MODULE.md](./INSIGHT_PERSISTENCE_MODULE.md) for complete documentation
+
+### Insight Generation (Legacy)
 - Generates headlines (max 280 characters for X posts)
 - Creates 2-3 sentence summaries explaining significance
 - Includes blockchain evidence citations (block heights, transaction IDs)
@@ -184,7 +216,6 @@ The test suite covers:
 # Google Cloud
 GCP_PROJECT_ID=your-project-id
 GCP_LOCATION=us-central1
-VERTEX_AI_MODEL=gemini-pro
 
 # BigQuery
 BIGQUERY_DATASET_INTEL=intel
@@ -198,6 +229,28 @@ MODEL_VERSION=1.0.0
 # Thresholds
 CONFIDENCE_THRESHOLD=0.7
 HEADLINE_MAX_LENGTH=280
+
+# AI Provider Configuration (NEW)
+# Choose one: vertex_ai, openai, anthropic, grok
+AI_PROVIDER=vertex_ai
+
+# Vertex AI (if AI_PROVIDER=vertex_ai)
+VERTEX_AI_PROJECT=your-project-id
+VERTEX_AI_LOCATION=us-central1
+VERTEX_AI_MODEL=gemini-pro
+
+# OpenAI (if AI_PROVIDER=openai)
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4-turbo
+
+# Anthropic (if AI_PROVIDER=anthropic)
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-3-opus-20240229
+
+# xAI Grok (if AI_PROVIDER=grok)
+GROK_API_KEY=xai-...
+GROK_MODEL=grok-beta
+GROK_API_BASE=https://api.x.ai/v1
 ```
 
 ## Signal Types
@@ -358,3 +411,150 @@ See `requirements.txt` for full dependency list. Key dependencies:
 ## License
 
 Proprietary - utxoIQ Platform
+
+
+## FastAPI Application (NEW)
+
+The service now runs as a FastAPI application with automatic background polling.
+
+### Application Structure
+
+- **Lifespan Management**: Starts/stops background polling task automatically
+- **Background Polling**: Polls for unprocessed signals every 10 seconds
+- **Health Checks**: `/health` endpoint for monitoring
+- **Manual Triggers**: `/trigger-cycle` endpoint for testing
+- **Statistics**: `/stats` endpoint for service metrics
+
+### Running the Application
+
+```bash
+# Development with auto-reload
+uvicorn src.main:app --reload --host 0.0.0.0 --port 8080
+
+# Production
+uvicorn src.main:app --host 0.0.0.0 --port 8080 --workers 1
+
+# With environment variables
+PORT=8080 POLL_INTERVAL_SECONDS=10 uvicorn src.main:app
+```
+
+### API Endpoints
+
+#### GET /
+Service information and status.
+
+```bash
+curl http://localhost:8080/
+```
+
+Response:
+```json
+{
+  "service": "utxoIQ Insight Generator",
+  "version": "1.0.0",
+  "status": "running"
+}
+```
+
+#### GET /health
+Health check with service diagnostics.
+
+```bash
+curl http://localhost:8080/health
+```
+
+Response:
+```json
+{
+  "status": "healthy",
+  "polling_active": true,
+  "poll_interval_seconds": 10,
+  "confidence_threshold": 0.7,
+  "ai_provider": "VertexAIProvider",
+  "unprocessed_signals": 5,
+  "project_id": "utxoiq-dev",
+  "dataset": "intel"
+}
+```
+
+#### POST /trigger-cycle
+Manually trigger a polling cycle.
+
+```bash
+curl -X POST http://localhost:8080/trigger-cycle
+```
+
+Response:
+```json
+{
+  "correlation_id": "abc-123-def-456",
+  "signal_groups": 2,
+  "signals_processed": 5,
+  "insights_generated": 4
+}
+```
+
+#### GET /stats
+Get service statistics.
+
+```bash
+curl http://localhost:8080/stats
+```
+
+Response:
+```json
+{
+  "unprocessed_signals": 10,
+  "stale_signals": 2,
+  "polling_active": true,
+  "poll_interval_seconds": 10
+}
+```
+
+### Polling Loop
+
+The service automatically starts a background polling loop that:
+
+1. Polls BigQuery for unprocessed signals every 10 seconds
+2. Groups signals by type and block height
+3. Generates insights using configured AI provider
+4. Persists insights to BigQuery
+5. Marks signals as processed
+6. Logs all operations with correlation IDs
+
+### Configuration
+
+```bash
+# Polling interval (seconds)
+POLL_INTERVAL_SECONDS=10
+
+# Minimum confidence threshold
+CONFIDENCE_THRESHOLD=0.7
+
+# BigQuery dataset
+DATASET_INTEL=intel
+
+# AI provider
+AI_PROVIDER=vertex_ai
+```
+
+### Monitoring
+
+The application logs all operations with correlation IDs for request tracing:
+
+```
+2024-01-15 10:30:00 - INFO - Starting polling cycle [correlation_id=abc-123]
+2024-01-15 10:30:01 - INFO - Found 5 unprocessed signals
+2024-01-15 10:30:02 - INFO - Generating insight for signal xyz [correlation_id=abc-123]
+2024-01-15 10:30:05 - INFO - Successfully persisted insight [insight_id=def-456]
+2024-01-15 10:30:05 - INFO - Polling cycle complete: 5 signals, 4 insights
+```
+
+### Requirements Implemented
+
+This FastAPI application implements the following requirements:
+
+- **3.1**: Poll for unprocessed signals with confidence >= 0.7
+- **3.2**: Group signals by type and block height
+- **3.5**: Mark signals as processed after successful insight creation
+- **5.2**: Wire together all insight generation components with correlation ID logging

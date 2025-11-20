@@ -13,7 +13,7 @@ from .processors import (
     ExchangeProcessor,
     MinerProcessor,
     WhaleProcessor,
-    PredictiveAnalytics
+    PredictiveAnalyticsModule
 )
 from .config import settings
 import logging
@@ -33,7 +33,7 @@ class SignalProcessor:
         self.exchange_processor = ExchangeProcessor()
         self.miner_processor = MinerProcessor()
         self.whale_processor = WhaleProcessor()
-        self.predictive_analytics = PredictiveAnalytics()
+        self.predictive_analytics = PredictiveAnalyticsModule()
         
         self.confidence_threshold = settings.confidence_threshold
         

@@ -57,6 +57,57 @@ block_processor = BitcoinBlockProcessor()
 bq_client = bigquery.Client()
 entity_module = EntityIdentificationModule(bigquery_client=bq_client)
 
+# Initialize signal processors for pipeline orchestrator
+from src.processors import (
+    MempoolProcessor,
+    ExchangeProcessor,
+    MinerProcessor,
+    WhaleProcessor,
+    TreasuryProcessor,
+    PredictiveAnalyticsModule
+)
+from src.processors.base_processor import ProcessorConfig
+from src.pipeline_orchestrator import PipelineOrchestrator
+from src.signal_persistence import SignalPersistenceModule
+from src.monitoring import MonitoringModule
+
+# Create processor configuration
+processor_config = ProcessorConfig(
+    enabled=True,
+    confidence_threshold=0.5,  # Lower threshold for predictive signals
+    time_window='24h'
+)
+
+# Initialize all signal processors including predictive analytics
+signal_processors = [
+    MempoolProcessor(processor_config),
+    ExchangeProcessor(processor_config),
+    MinerProcessor(processor_config),
+    WhaleProcessor(processor_config),
+    TreasuryProcessor(processor_config),
+    PredictiveAnalyticsModule(processor_config)  # Predictive analytics integrated
+]
+
+# Initialize monitoring and persistence modules
+monitoring_module = MonitoringModule(
+    project_id=os.getenv('GCP_PROJECT_ID', 'utxoiq-dev'),
+    enabled=os.getenv('MONITORING_ENABLED', 'false').lower() == 'true'
+)
+
+signal_persistence = SignalPersistenceModule(
+    bigquery_client=bq_client,
+    project_id=os.getenv('GCP_PROJECT_ID', 'utxoiq-dev')
+)
+
+# Initialize pipeline orchestrator
+pipeline_orchestrator = PipelineOrchestrator(
+    signal_processors=signal_processors,
+    signal_persistence=signal_persistence,
+    monitoring_module=monitoring_module
+)
+
+logger.info(f"Pipeline orchestrator initialized with {len(signal_processors)} processors")
+
 # Initialize block monitor (optional - only if Bitcoin RPC is configured)
 monitor: Optional[BlockMonitor] = None
 bitcoin_rpc_url = os.getenv('BITCOIN_RPC_URL')
@@ -77,16 +128,17 @@ if bitcoin_rpc_url:
         block_count = rpc_client.getblockcount()
         logger.info(f"Connected to Bitcoin Core (height: {block_count})")
         
-        # Create and start monitor
+        # Create and start monitor with pipeline orchestrator
         monitor = BlockMonitor(
             rpc_client=rpc_client,
             block_processor=block_processor,
             bigquery_adapter=bq_adapter,
+            pipeline_orchestrator=pipeline_orchestrator,
             poll_interval=int(os.getenv('POLL_INTERVAL', '30')),
             mempool_api_url=os.getenv('MEMPOOL_API_URL', 'https://mempool.space/api')
         )
         monitor.start()
-        logger.info("Block monitor started successfully")
+        logger.info("Block monitor started successfully with signal generation pipeline")
         
     except Exception as e:
         logger.warning(f"Could not start block monitor: {e}")
@@ -188,6 +240,58 @@ async def cleanup_old_data(hours: int = 2):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/process/signals")
+async def process_signals(block_data: Dict):
+    """
+    Process a block through the signal generation pipeline.
+    
+    This endpoint runs all signal processors (including predictive analytics)
+    on the provided block data and persists signals to BigQuery.
+    
+    Args:
+        block_data: Block data with optional historical context
+        
+    Returns:
+        Pipeline processing result with generated signals
+    """
+    try:
+        from src.models import BlockData
+        
+        # Extract block info
+        block = BlockData(
+            block_hash=block_data.get('hash', ''),
+            height=block_data.get('height', 0),
+            timestamp=datetime.fromisoformat(block_data['timestamp']) if 'timestamp' in block_data else datetime.utcnow(),
+            size=block_data.get('size', 0),
+            tx_count=block_data.get('tx_count', 0),
+            fees_total=block_data.get('fees_total', 0.0)
+        )
+        
+        # Extract historical data if provided
+        historical_data = block_data.get('historical_data', {})
+        
+        # Process through pipeline
+        result = await pipeline_orchestrator.process_new_block(
+            block=block,
+            historical_data=historical_data
+        )
+        
+        return {
+            "status": "success" if result.success else "failed",
+            "correlation_id": result.correlation_id,
+            "block_height": result.block_height,
+            "signals_generated": len(result.signals),
+            "signal_types": [s.type.value for s in result.signals],
+            "predictive_signals": sum(1 for s in result.signals if s.is_predictive),
+            "timing_metrics": result.timing_metrics,
+            "error": result.error
+        }
+        
+    except Exception as e:
+        logger.error(f"Signal processing failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/status")
 async def get_status():
     """
@@ -205,7 +309,12 @@ async def get_status():
             "latest_block_height": latest_height,
             "dataset": f"{bq_adapter.project_id}.{bq_adapter.dataset_id}",
             "realtime_window_hours": bq_adapter.realtime_hours,
-            "custom_dataset_stats": stats
+            "custom_dataset_stats": stats,
+            "pipeline": {
+                "processors": len(signal_processors),
+                "enabled_processors": sum(1 for p in signal_processors if p.enabled),
+                "processor_types": [p.__class__.__name__ for p in signal_processors if p.enabled]
+            }
         }
         
         # Add monitor status if available

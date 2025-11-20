@@ -30,6 +30,7 @@ class BlockMonitor:
         rpc_client,
         block_processor,
         bigquery_adapter,
+        pipeline_orchestrator=None,
         poll_interval: int = 10,
         mempool_api_url: str = "https://mempool.space/api"
     ):
@@ -40,12 +41,14 @@ class BlockMonitor:
             rpc_client: Bitcoin RPC client
             block_processor: Block processor instance
             bigquery_adapter: BigQuery adapter instance
+            pipeline_orchestrator: Optional pipeline orchestrator for signal generation
             poll_interval: Seconds between checks (default: 10)
             mempool_api_url: mempool.space API URL for fallback
         """
         self.rpc = rpc_client
         self.block_processor = block_processor
         self.bq_adapter = bigquery_adapter
+        self.pipeline_orchestrator = pipeline_orchestrator
         self.poll_interval = poll_interval
         self.mempool_api_url = mempool_api_url.rstrip('/')
         self.last_processed_height: Optional[int] = None
@@ -133,7 +136,7 @@ class BlockMonitor:
     
     def process_and_ingest_block(self, block_data: dict) -> bool:
         """
-        Process and ingest block data.
+        Process and ingest block data, then trigger signal generation.
         
         Args:
             block_data: Raw block data from Bitcoin Core
@@ -178,11 +181,110 @@ class BlockMonitor:
                 f"({processed_block['transaction_count']} transactions)"
             )
             
+            # Trigger signal generation pipeline if orchestrator is available
+            if self.pipeline_orchestrator:
+                self._trigger_signal_generation(processed_block, block_data)
+            
             return True
             
         except Exception as e:
             logger.error(f"Failed to process block: {e}", exc_info=True)
             return False
+    
+    def _trigger_signal_generation(self, processed_block: dict, raw_block_data: dict) -> None:
+        """
+        Trigger signal generation pipeline for the processed block.
+        
+        This method runs the pipeline orchestrator asynchronously to generate
+        signals from the block data. It must complete within 5 seconds of block
+        detection to meet the pipeline SLA.
+        
+        Args:
+            processed_block: Processed block data from block processor
+            raw_block_data: Raw block data from Bitcoin Core (for historical context)
+            
+        Requirements: 5.1
+        """
+        import asyncio
+        from src.models import BlockData
+        
+        try:
+            # Create BlockData model for pipeline
+            block = BlockData(
+                block_hash=processed_block['hash'],
+                height=processed_block['number'],
+                timestamp=processed_block['timestamp'],
+                size=processed_block.get('size', 0),
+                tx_count=processed_block['transaction_count'],
+                fees_total=processed_block.get('fees_total', 0.0)
+            )
+            
+            # Extract historical data if available (for predictive signals)
+            historical_data = {
+                'raw_block': raw_block_data,
+                'transactions': raw_block_data.get('tx', [])
+            }
+            
+            # Run pipeline orchestrator asynchronously
+            logger.info(
+                f"🔄 Triggering signal generation for block {block.height}",
+                extra={
+                    "block_height": block.height,
+                    "block_hash": block.block_hash,
+                    "tx_count": block.tx_count
+                }
+            )
+            
+            # Try to get the current event loop, or create a new one if none exists
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_closed():
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+            except RuntimeError:
+                # No event loop in current thread, create a new one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            # Run the pipeline orchestrator
+            result = loop.run_until_complete(
+                self.pipeline_orchestrator.process_new_block(
+                    block=block,
+                    historical_data=historical_data
+                )
+            )
+            
+            if result.success:
+                logger.info(
+                    f"✅ Signal generation completed for block {block.height}",
+                    extra={
+                        "correlation_id": result.correlation_id,
+                        "block_height": block.height,
+                        "signal_count": len(result.signals),
+                        "duration_ms": result.timing_metrics.get('total_duration_ms', 0)
+                    }
+                )
+            else:
+                logger.error(
+                    f"❌ Signal generation failed for block {block.height}",
+                    extra={
+                        "correlation_id": result.correlation_id,
+                        "block_height": block.height,
+                        "error": result.error
+                    }
+                )
+            
+        except Exception as e:
+            logger.error(
+                f"Failed to trigger signal generation for block {processed_block['number']}: {e}",
+                extra={
+                    "block_height": processed_block['number'],
+                    "error": str(e),
+                    "error_type": type(e).__name__
+                },
+                exc_info=True
+            )
+            # Don't raise - signal generation failures shouldn't block block ingestion
     
     def monitor_loop(self):
         """Main monitoring loop."""
