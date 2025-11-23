@@ -28,11 +28,12 @@ echo Service: %SERVICE_NAME%
 echo Region: %REGION%
 echo.
 
-REM Check if .env file exists
+REM Check if .env file exists (optional - can configure via Cloud Run console)
 if not exist "%SERVICE_DIR%\.env" (
-    echo ERROR: .env file not found in %SERVICE_DIR%
-    echo Please create .env file with required configuration
-    exit /b 1
+    echo WARNING: .env file not found in %SERVICE_DIR%
+    echo Environment variables will need to be configured in Cloud Run console after deployment
+    echo Press Ctrl+C to cancel or any key to continue...
+    pause >nul
 )
 
 REM Set GCP project

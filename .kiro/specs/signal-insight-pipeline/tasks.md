@@ -492,20 +492,32 @@
     - Create services/insight-generator/.env.example
     - _Requirements: 7.1, 8.1_
 
-- [ ] 21. Deploy services to Cloud Run
-  - [ ] 21.1 Create Dockerfile for utxoiq-ingestion service
+- [x] 21. Deploy services to Cloud Run
+
+
+
+
+
+
+  - [x] 21.1 Create Dockerfile for utxoiq-ingestion service
+
+
     - Use Python 3.12 base image
     - Install dependencies from requirements.txt
     - Set up FastAPI with uvicorn
     - _Requirements: 5.5_
   
-  - [ ] 21.2 Create Dockerfile for insight-generator service
+  - [x] 21.2 Create Dockerfile for insight-generator service
+
+
     - Use Python 3.12 base image
     - Install dependencies from requirements.txt
     - Set up FastAPI with uvicorn
     - _Requirements: 5.5_
   
-  - [ ] 21.3 Deploy both services to Cloud Run
+  - [x] 21.3 Deploy both services to Cloud Run
+
+
     - Configure environment variables via Cloud Run
     - Set up Cloud Secret Manager for API keys
     - Configure auto-scaling and resource limits
